@@ -14,6 +14,9 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import android.os.SystemClock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -172,6 +175,27 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     fun endScrub() {
         scrubMs?.let { seekTo(it) }
         scrubMs = null
+    }
+
+    /** Sleep timer: minutes chosen (null = off) and when it ends (SystemClock.elapsedRealtime). */
+    var sleepMinutes by mutableStateOf<Int?>(null)
+        private set
+    var sleepEndsAt by mutableLongStateOf(0L)
+        private set
+    private var sleepJob: Job? = null
+
+    /** Start (or replace) the sleep timer; null = off. When it ends, the music pauses. */
+    fun setSleepTimer(minutes: Int?) {
+        sleepJob?.cancel()
+        sleepMinutes = minutes
+        if (minutes == null) return
+        sleepEndsAt = SystemClock.elapsedRealtime() + minutes * 60_000L
+        // One wait, no polling. Lives as long as the app (cleared from recents = gone).
+        sleepJob = viewModelScope.launch {
+            delay(minutes * 60_000L)
+            player.pause()
+            sleepMinutes = null
+        }
     }
 
     fun playPause() {

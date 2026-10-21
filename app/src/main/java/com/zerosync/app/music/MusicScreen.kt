@@ -115,6 +115,9 @@ private fun Player(vm: MusicViewModel) {
     // middle (same number of folders above and below). picked = highlighted row, null = closed.
     var order by remember { mutableStateOf(emptyList<MusicFolder>()) }
     var picked by remember { mutableStateOf<Int?>(null) }
+    // Sleep timer picker (volume button: hold, drag left). Index into SleepChoices, null = closed.
+    var timerPick by remember { mutableStateOf<Int?>(null) }
+    var timerStart by remember { mutableStateOf(0) }
     val folders = vm.folders
 
     Box(Modifier.fillMaxSize()) {
@@ -222,6 +225,16 @@ private fun Player(vm: MusicViewModel) {
                         volume = vm.volume,
                         maxVolume = vm.maxVolume,
                         onVolumeStep = vm::turnVolumeWheel,
+                        // Left + move up/down: pick a sleep timer; applied on lift.
+                        onLeftStart = {
+                            timerPick = SleepChoices.indexOf(vm.sleepMinutes).coerceAtLeast(0)
+                            timerStart = timerPick!!
+                        },
+                        onLeftMove = { steps -> timerPick = (timerStart + steps).coerceIn(0, SleepChoices.lastIndex) },
+                        onLeftRelease = {
+                            timerPick?.let { if (SleepChoices[it] != vm.sleepMinutes) vm.setSleepTimer(SleepChoices[it]) }
+                            timerPick = null
+                        },
                         size = min(wheel * 0.45f, 72.dp),
                     )
                 }
@@ -262,10 +275,21 @@ private fun Player(vm: MusicViewModel) {
         }
     }
     picked?.let { FolderPicker(order.map { it.name }, it) }
+    timerPick?.let { FolderPicker(SleepChoices.map(::sleepLabel), it) }
     }
 }
 
 /** Folder boxes shown while holding the button and dragging down. Highlighted = picked on lift. */
+/** Sleep timer choices in minutes; null = off. */
+private val SleepChoices = listOf(null, 30, 60, 120, 300)
+
+private fun sleepLabel(minutes: Int?) = when {
+    minutes == null -> "Timer off"
+    minutes < 60 -> "$minutes minutes"
+    minutes == 60 -> "1 hour"
+    else -> "${minutes / 60} hours"
+}
+
 @Composable
 private fun FolderPicker(names: List<String>, highlighted: Int) {
     Column(

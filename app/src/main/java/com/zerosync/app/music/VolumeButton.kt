@@ -36,7 +36,10 @@ private val VOLUME_TRAVEL = 120.dp
 /** Half of the arc's sweep, in degrees (the arc runs from -ARC_HALF to +ARC_HALF). */
 private const val ARC_HALF = 60f
 
-private enum class VolMode { Idle, Menu, Volume }
+private enum class VolMode { Idle, Menu, Volume, Timer }
+
+/** Finger travel (up/down) that moves the timer choice by one. */
+private val TIMER_STEP = 48.dp
 
 /**
  * Small round button with no icon (left side). A tap does nothing.
@@ -44,7 +47,8 @@ private enum class VolMode { Idle, Menu, Volume }
  * 2. Still holding, drag into a half:
  *    - Right: a curved bar appears on the right (shows the volume). Move the finger up for
  *      louder, down for quieter: about [VOLUME_TRAVEL] covers the full range; each step = [onVolumeStep] (+1 / -1) + vibration.
- *    - Left: [onLeft] fires once (does nothing yet; for future features).
+ *    - Left: sleep timer choices. [onLeftStart] once, then [onLeftMove] with how many
+ *      steps the finger moved (each [TIMER_STEP]; down = positive). Lift = [onLeftRelease].
  * 3. Lift your finger: everything closes.
  */
 @Composable
@@ -55,16 +59,20 @@ fun VolumeButton(
     onVolumeStep: (Int) -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
-    onLeft: () -> Unit = {},
+    onLeftStart: () -> Unit = {},
+    onLeftMove: (Int) -> Unit = {},
+    onLeftRelease: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
     val currentOnVolumeStep by rememberUpdatedState(onVolumeStep)
-    val currentOnLeft by rememberUpdatedState(onLeft)
+    val currentOnLeftStart by rememberUpdatedState(onLeftStart)
+    val currentOnLeftMove by rememberUpdatedState(onLeftMove)
+    val currentOnLeftRelease by rememberUpdatedState(onLeftRelease)
     val currentMax by rememberUpdatedState(maxVolume)
     var mode by remember { mutableStateOf(VolMode.Idle) }
     val pop = rememberMenuPop(mode == VolMode.Menu)
-    // Same order as TwoParts: right = volume, left = empty for now.
-    val menuIcons = listOf(rememberVectorPainter(ZsIcons.Volume), null)
+    // Same order as TwoParts: right = volume, left = sleep timer.
+    val menuIcons = listOf(rememberVectorPainter(ZsIcons.Volume), rememberVectorPainter(ZsIcons.Clock))
 
     Canvas(
         modifier
@@ -107,8 +115,10 @@ fun VolumeButton(
                                     startY = p.y
                                     steps = 0
                                 } else {
-                                    currentOnLeft()
-                                    mode = VolMode.Idle // one action, then done until next hold
+                                    mode = VolMode.Timer
+                                    startY = p.y
+                                    steps = 0
+                                    currentOnLeftStart()
                                 }
                             }
                             VolMode.Volume -> {
@@ -117,9 +127,18 @@ fun VolumeButton(
                                 while (steps < now) { steps++; currentOnVolumeStep(1); haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                                 while (steps > now) { steps--; currentOnVolumeStep(-1); haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                             }
+                            VolMode.Timer -> {
+                                val now = ((p.y - startY) / TIMER_STEP.toPx()).toInt()
+                                if (now != steps) {
+                                    steps = now
+                                    currentOnLeftMove(now)
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
                             VolMode.Idle -> Unit
                         }
                     }
+                    if (mode == VolMode.Timer) currentOnLeftRelease()
                     mode = VolMode.Idle
                 }
             },
@@ -150,7 +169,8 @@ fun VolumeButton(
                     drawArc(ZsColors.Primary, ARC_HALF, -ARC_HALF * 2 * level, false, topLeft, box, style = Stroke(band, cap = StrokeCap.Round))
                 }
             }
-            VolMode.Idle -> {
+            // Timer: the choices are drawn by the screen; the button stays plain.
+            VolMode.Idle, VolMode.Timer -> {
                 drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
             }

@@ -23,6 +23,8 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
   No service, so HyperOS may still kill it in the background.
 - Shuffle button (left of Previous): random order within the playing folder.
 - Loop button (right of Next): repeats the current song forever.
+- Sleep timer (volume button: hold, drag left, move up/down): Off / 30 min / 1 h / 2 h / 5 h.
+  Pauses the music when it ends. One coroutine wait in the ViewModel (user-approved 2026-10-21), no service.
 - Lock-screen player: if the Music tab is open and playing when the phone locks, pressing power
   shows ZeroSync's player over the lock screen (no unlock) with both wheels. Only the player
   is shown while locked (no nav bar / other tabs).
