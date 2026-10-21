@@ -154,11 +154,11 @@ private fun Player(vm: MusicViewModel) {
 
         TimestampBar(vm)
 
-        // Shuffle · Previous · Play/Pause · Next
+        // Shuffle · Previous · Play/Pause · Next · Loop
         Row(
             Modifier.padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconButton(onClick = vm::toggleShuffle, modifier = Modifier.size(48.dp)) {
                 Icon(
@@ -189,6 +189,15 @@ private fun Player(vm: MusicViewModel) {
             }
             IconButton(onClick = vm::next, modifier = Modifier.size(56.dp)) {
                 Icon(ZsIcons.SkipNext, contentDescription = "Next song", tint = Color.White, modifier = Modifier.size(32.dp))
+            }
+            IconButton(onClick = vm::toggleRepeatOne, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    ZsIcons.RepeatOne,
+                    contentDescription = if (vm.repeatOne) "Loop song on" else "Loop song off",
+                    // Lilac = on, dim = off.
+                    tint = if (vm.repeatOne) ZsColors.Primary else Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
 

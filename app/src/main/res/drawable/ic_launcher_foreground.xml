@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ZeroSync icon: a "0" ring split in two halves (sync) with a "Z" whose diagonal
+     cuts through the ring's gaps. 108x108 adaptive canvas; art stays in the safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Ring half: top-right gap to bottom-left gap, clockwise. -->
+    <path
+        android:pathData="M76.52,41 A26,26 0 0,1 41,76.52"
+        android:strokeColor="#C19EE0"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- Ring half: bottom-left gap to top-right gap. -->
+    <path
+        android:pathData="M31.48,67 A26,26 0 0,1 67,31.48"
+        android:strokeColor="#9163CB"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- Z: top bar, long diagonal through both gaps, bottom bar. -->
+    <path
+        android:pathData="M42,42 L66,42 M74,34 L34,74 M42,66 L66,66"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+</vector>

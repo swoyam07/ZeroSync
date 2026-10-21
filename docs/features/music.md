@@ -22,6 +22,7 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
 - Keeps playing when leaving the app (home / app switch); stops when cleared from recents.
   No service, so HyperOS may still kill it in the background.
 - Shuffle button (left of Previous): random order within the playing folder.
+- Loop button (right of Next): repeats the current song forever.
 - Lock-screen player: if the Music tab is open and playing when the phone locks, pressing power
   shows ZeroSync's player over the lock screen (no unlock) with both wheels. Only the player
   is shown while locked (no nav bar / other tabs).
@@ -37,7 +38,7 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
 - `MusicRepository.kt`, `MusicViewModel.kt`, `MusicScreen.kt`, `RotaryWheel.kt`
 
 ## Not done yet / ideas
-- Search / playlists / repeat mode
+- Search / playlists
 - Remember last song across reboots
 
 ## Done when

@@ -143,6 +143,15 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         player.shuffleModeEnabled = shuffle
     }
 
+    /** Loop: play the same song again and again. */
+    var repeatOne by mutableStateOf(false)
+        private set
+
+    fun toggleRepeatOne() {
+        repeatOne = !repeatOne
+        player.repeatMode = if (repeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
     fun playPause() {
         // A picked song or another folder is waiting: start it (replaces what plays now).
         if (startPending) return releaseSongWheel()
