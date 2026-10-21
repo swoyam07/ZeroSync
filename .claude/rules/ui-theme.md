@@ -15,6 +15,7 @@ paths:
   - secondary `#8A8A8A`: secondary buttons, chips, outlines, inactive controls
   - tertiary `#D0D0D0`: FABs, badges, progress indicators only
   - surface `#141414`, text `#E6E6E6`
-- Main nav: floating pill/capsule bottom bar: Gallery (default), Contact, Music, File, Camera.
+- Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery default, Contact,
+  Music, File, Camera). Swipe sideways = big tab name on screen, lift = switch. Tap a dot = jump.
 - Section mode switches: pill tab at top + sideways swipe on the section screen (no nav-bar gestures).
 - Use lazy lists/grids for large data. No animations unless approved.

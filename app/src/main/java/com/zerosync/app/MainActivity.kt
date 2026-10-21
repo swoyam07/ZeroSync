@@ -55,7 +55,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
 import com.zerosync.app.ui.ZsIcons
-import com.zerosync.app.ui.PillNavBar
+import com.zerosync.app.ui.DialNavBar
+import com.zerosync.app.ui.DialPreview
 import com.zerosync.app.ui.theme.ZeroSyncTheme
 import com.zerosync.app.ui.theme.ZsColors
 
@@ -111,6 +112,7 @@ private fun ZeroSyncApp() {
     val density = LocalDensity.current
     var screenWidthPx by remember { mutableIntStateOf(0) }
     var navWidthPx by remember { mutableIntStateOf(0) }
+    var navPreview by remember { mutableStateOf<AppTab?>(null) }
     val navSideGap = if (navWidthPx > 0) with(density) { ((screenWidthPx - navWidthPx) / 2).toDp() } else 28.dp
 
     Box(
@@ -157,15 +159,19 @@ private fun ZeroSyncApp() {
             }
         }
 
+        // Nav: swipe-dial strip. While swiping, the tab name shows big over the screen.
+        navPreview?.let { DialPreview(it) }
         if (!fullScreen) {
-            PillNavBar(
+            DialNavBar(
                 selected = tab,
                 onSelect = { tab = it },
+                onPreview = { navPreview = it },
+                preview = navPreview,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .onSizeChanged { navWidthPx = it.width }
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
+                    .padding(start = 40.dp, end = 40.dp, bottom = 16.dp)
+                    .onSizeChanged { navWidthPx = it.width },
             )
         }
     }
