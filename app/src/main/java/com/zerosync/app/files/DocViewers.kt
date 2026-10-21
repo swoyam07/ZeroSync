@@ -68,6 +68,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zerosync.app.ui.ZsIcons
+import com.zerosync.app.gallery.Thumbnail
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.zerosync.app.ui.theme.ZsColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -89,6 +94,11 @@ fun DocViewer(doc: DocFile, content: DocContent, onBack: () -> Unit) {
             is DocContent.Slides -> SlidesView(content.presentation)
             is DocContent.Excel -> ExcelView(content.sheets)
             is DocContent.Text -> TextView(content.lines)
+            is DocContent.Picture -> Zoomable {
+                // Big system thumbnail (up to 2048 px) is sharp on screen and light on memory.
+                Thumbnail(content.uri, Modifier.fillMaxSize(), sizePx = 2048, contentScale = ContentScale.Fit, placeholder = Color.Black)
+            }
+            is DocContent.Video -> VideoView(content.uri)
         }
         // Small back button + name, top-left, over the content.
         Row(
@@ -413,6 +423,26 @@ private fun Cell(text: String, header: Boolean = false) {
             .width(CELL_WIDTH)
             .border(BorderStroke(0.5.dp, ZsColors.Secondary.copy(alpha = 0.5f)))
             .padding(6.dp),
+    )
+}
+
+// ---------- Video: opens paused, user presses play ----------
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun VideoView(uri: Uri) {
+    val context = LocalContext.current
+    val player = remember(uri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(uri))
+            playWhenReady = false // no autoplay
+            prepare()
+        }
+    }
+    DisposableEffect(player) { onDispose { player.release() } }
+    AndroidView(
+        factory = { PlayerView(it).apply { this.player = player; useController = true; showController() } },
+        modifier = Modifier.fillMaxSize(),
     )
 }
 

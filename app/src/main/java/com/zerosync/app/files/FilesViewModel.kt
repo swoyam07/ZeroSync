@@ -20,6 +20,8 @@ enum class DocKind(val label: String, val exts: List<String>) {
     Ppt("PPT", listOf("pptx", "ppt")),
     Excel("Excel", listOf("xlsx", "xls")),
     Text("Text", listOf("txt", "csv")),
+    Images("Images", listOf("jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp")),
+    Videos("Videos", listOf("mp4", "mkv", "webm", "3gp", "mov", "avi")),
 }
 
 data class DocFile(val uri: Uri, val name: String, val size: Long, val modified: Long, val kind: DocKind) {
@@ -37,6 +39,8 @@ sealed interface DocContent {
     data class Slides(val presentation: Presentation) : DocContent
     data class Excel(val sheets: List<Sheet>) : DocContent
     data class Text(val lines: List<String>) : DocContent
+    data class Picture(val uri: Uri) : DocContent
+    data class Video(val uri: Uri) : DocContent
 }
 
 /** Biggest text file we show (bigger ones are cut). */
@@ -88,9 +92,15 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             while (c.moveToNext()) {
                 val name = c.getString(nCol) ?: continue
                 val kind = byExt[name.substringAfterLast('.', "").lowercase()] ?: continue
+                // Images/videos use their own media address so thumbnails work.
+                val base = when (kind) {
+                    DocKind.Images -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    DocKind.Videos -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    else -> collection
+                }
                 out.add(
                     DocFile(
-                        ContentUris.withAppendedId(collection, c.getLong(idCol)),
+                        ContentUris.withAppendedId(base, c.getLong(idCol)),
                         name,
                         c.getLong(sCol),
                         c.getLong(dCol) * 1000,
@@ -119,6 +129,8 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             return DocContent.Failed("Old .${doc.ext} format can't be previewed. Save it as .${doc.ext}x to view it.")
         }
         if (doc.kind == DocKind.Pdf) return DocContent.Pdf(doc.uri)
+        if (doc.kind == DocKind.Images) return DocContent.Picture(doc.uri)
+        if (doc.kind == DocKind.Videos) return DocContent.Video(doc.uri)
         val input = resolver.openInputStream(doc.uri) ?: error("Can't open this file")
         return input.use {
             when (doc.kind) {
@@ -141,6 +153,14 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             n += read
         }
         return String(buf, 0, n)
+    }
+
+    /** Delete a file from the phone (allowed by "All files access"). */
+    fun delete(doc: DocFile) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { runCatching { resolver.delete(doc.uri, null, null) > 0 }.getOrDefault(false) }
+            if (ok) docs = docs - doc
+        }
     }
 
     fun close() {
