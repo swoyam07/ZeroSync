@@ -11,6 +11,8 @@
 | 2026-10-21 | Camera | Jetpack CameraX 1.5.0 + built-in PdfDocument | Official, offline, simple; custom document frames |
 | 2026-10-21 | Camera privacy | Private by default; per-file Public switch copies to shared storage, off deletes it | User choice |
 | 2026-10-21 | Camera encryption | NOT added | Sandbox already blocks other apps; Android FBE already protects a locked phone over USB. Only helps vs root/debug, which user excludes |
+| 2026-10-21 | Files access | MANAGE_EXTERNAL_STORAGE ("All files access"), read-only | User wants whole storage; folder picker can't reach Download |
+| 2026-10-21 | Files viewers | PdfRenderer + own docx/pptx/xlsx reader, no libraries | Offline, small; simplified layout |
 | 2026-10-18 | Music playback | ExoPlayer in ViewModel; NO service/notification (media3-session removed) | User doesn't want a notification; screen-off play is enough |
 
 ## Open questions
@@ -18,7 +20,6 @@
 - Gallery & Contact marked "on hold". Build order?
 - Phone: "default call pick up" means full-screen answer UI, or auto-answer?
 - Contact long-press gesture: contact icon (not gallery)?
-- Word (.docx) viewer: no built-in option. Decide.
 - Whole-gallery reads shared storage. OK as "read-in only"?
 
 ## Decided

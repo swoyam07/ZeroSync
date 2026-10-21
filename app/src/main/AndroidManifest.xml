@@ -18,6 +18,12 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!-- Files: find PDF / Word / PowerPoint / Excel anywhere on the phone (read-only use).
+         User turns it on in Settings ("All files access"); approved 2026-10-21. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <!-- Offline by design: strip network permissions even if a library adds them.
          Without INTERNET, Android blocks every network socket for this app. -->
     <uses-permission
@@ -40,6 +46,7 @@
         <!-- Exported only because the launcher must start it. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

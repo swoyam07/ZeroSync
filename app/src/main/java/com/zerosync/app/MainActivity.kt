@@ -46,6 +46,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zerosync.app.gallery.GalleryScreen
 import com.zerosync.app.gallery.GalleryViewModel
 import com.zerosync.app.ui.AppTab
+import com.zerosync.app.files.FilesScreen
+import com.zerosync.app.files.FilesViewModel
 import com.zerosync.app.camera.CameraScreen
 import com.zerosync.app.camera.CameraViewModel
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -77,6 +79,7 @@ private fun ZeroSyncApp() {
     var tab by rememberSaveable { mutableStateOf(AppTab.Gallery) }
     val gallery: GalleryViewModel = viewModel()
     val music: MusicViewModel = viewModel()
+    val files: FilesViewModel = viewModel()
 
     // Lock-screen player: while music plays on the Music tab, ZeroSync may show over the
     // lock screen (power button) without unlocking, so the wheels stay usable.
@@ -107,7 +110,8 @@ private fun ZeroSyncApp() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val fullScreen = (tab == AppTab.Gallery && gallery.isFullScreen) || lockedPlayer
+    val fullScreen = (tab == AppTab.Gallery && gallery.isFullScreen) || lockedPlayer ||
+        (tab == AppTab.File && files.opened != null) // document viewer uses the whole screen
 
     // Measure the nav bar so floating controls can use the same side gap.
     // Kept after the bar hides (full-screen feed), so controls don't jump.
@@ -129,6 +133,7 @@ private fun ZeroSyncApp() {
             }
             AppTab.Music -> MusicScreen(music)
             AppTab.Camera -> CameraScreen(viewModel<CameraViewModel>())
+            AppTab.File -> FilesScreen(files)
             else -> Text(
                 "${tab.label}: coming soon",
                 color = ZsColors.OnSurface.copy(alpha = 0.6f),
