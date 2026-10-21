@@ -6,6 +6,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Scaled down around the centre so the logo sits smaller on the home screen. -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.78" android:scaleY="0.78">
     <!-- Ring half: top-right gap to bottom-left gap, clockwise. -->
     <path
         android:pathData="M76.52,41 A26,26 0 0,1 41,76.52"
@@ -24,4 +26,5 @@
         android:strokeColor="#FFFFFF"
         android:strokeWidth="6"
         android:strokeLineCap="round" />
+    </group>
 </vector>
