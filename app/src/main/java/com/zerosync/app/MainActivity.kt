@@ -76,7 +76,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun ZeroSyncApp() {
-    var tab by rememberSaveable { mutableStateOf(AppTab.Gallery) }
+    // Open on the section the app was left in; first install = Music.
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("app_state", Context.MODE_PRIVATE) }
+    var tab by rememberSaveable {
+        mutableStateOf(AppTab.entries.find { it.name == prefs.getString("lastTab", null) } ?: AppTab.Music)
+    }
+    LaunchedEffect(tab) { prefs.edit().putString("lastTab", tab.name).apply() }
     val gallery: GalleryViewModel = viewModel()
     val music: MusicViewModel = viewModel()
     val files: FilesViewModel = viewModel()

@@ -16,7 +16,8 @@ paths:
   - tertiary `#D0D0D0`: FABs, badges, progress indicators only
   - surface `#141414`, text `#E6E6E6`
   - Only exception: red `#D32F2F` for destructive Delete buttons (user-approved 2026-10-21).
-- Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery default, Contact,
+- Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery, Contact,
   Music, File, Camera). Swipe sideways = big tab name on screen, lift = switch. Tap a dot = jump.
+  App opens on the last-used section; first install = Music.
 - Section mode switches: pill tab at top + sideways swipe on the section screen (no nav-bar gestures).
 - Use lazy lists/grids for large data. No animations unless approved.
