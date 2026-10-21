@@ -2,7 +2,9 @@
 
 Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
 
-## Modes (top pill): Passport · ID · PDF · Saved
+## Modes (top pill): Passport · ID · PDF
+- Shutter centred at the bottom; Saved = folder button at the right edge (back = camera).
+  PDF in progress: Cancel / Submit N in a row above the shutter.
 - Live back camera with a white frame in the real document shape; outside is darkened.
   Only the inside of the frame is saved.
   - Passport: 35 × 45 mm (portrait) → JPEG.
@@ -11,7 +13,9 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
     Yes = take the next page; No = build one PDF from all pages. While pages are pending:
     Cancel (left of shutter) and Submit N (right).
 - Saved: category tabs Passport · ID · PDF (with counts); each lists only its own captures
-  (newest first) with a Public switch and Delete. Category = file name prefix.
+  (newest first) with a Public switch. Category = file name prefix.
+- Delete is two-step: swipe a row left → red trash-icon button appears on the right → tap it.
+  Swipe right to hide it. Swiping alone never deletes.
 
 ## Privacy (user decision 2026-10-21)
 - Everything is saved PRIVATE in app storage (`filesDir/camera`). Other apps can't see it.

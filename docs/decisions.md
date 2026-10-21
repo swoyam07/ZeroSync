@@ -10,6 +10,7 @@
 | 2026-10-18 | Thumbnails | Built-in loadThumbnail + LruCache (no Coil) | No extra library |
 | 2026-10-21 | Camera | Jetpack CameraX 1.5.0 + built-in PdfDocument | Official, offline, simple; custom document frames |
 | 2026-10-21 | Camera privacy | Private by default; per-file Public switch copies to shared storage, off deletes it | User choice |
+| 2026-10-21 | Camera encryption | NOT added | Sandbox already blocks other apps; Android FBE already protects a locked phone over USB. Only helps vs root/debug, which user excludes |
 | 2026-10-18 | Music playback | ExoPlayer in ViewModel; NO service/notification (media3-session removed) | User doesn't want a notification; screen-off play is enough |
 
 ## Open questions

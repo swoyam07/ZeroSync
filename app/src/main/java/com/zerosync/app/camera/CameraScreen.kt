@@ -31,6 +31,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -104,8 +107,10 @@ fun CameraScreen(vm: CameraViewModel) {
             !granted -> PermissionPrompt { launcher.launch(Manifest.permission.CAMERA) }
             else -> CameraView(vm)
         }
+        // Top pill: only the 3 camera modes. Saved opens from the button right of the shutter.
+        if (vm.mode == CameraMode.Saved) androidx.activity.compose.BackHandler { vm.mode = vm.lastCameraMode }
         PillSwitch(
-            options = CameraMode.entries,
+            options = CameraMode.entries - CameraMode.Saved,
             selected = vm.mode,
             label = { it.label },
             onSelect = { vm.mode = it },
@@ -176,11 +181,22 @@ private fun CameraView(vm: CameraViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             vm.message?.let { Text(it, color = Color.White, modifier = Modifier.padding(bottom = 12.dp)) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                // PDF in progress: cancel (left) and submit (right) around the shutter.
-                if (vm.mode == CameraMode.Pdf && vm.pdfPages.isNotEmpty()) {
+            // PDF in progress: Cancel and Submit in a row above the shutter.
+            if (vm.mode == CameraMode.Pdf && vm.pdfPages.isNotEmpty()) {
+                Row(
+                    Modifier.padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     TextButton(onClick = vm::cancelPdf) { Text("Cancel", color = ZsColors.Secondary) }
+                    Button(
+                        onClick = vm::finishPdf,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    ) { Text("Submit ${vm.pdfPages.size}") }
                 }
+            }
+            // Shutter exactly in the centre; Saved folder at the right edge.
+            Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
                 Shutter(enabled = !vm.busy) {
                     capture.takePicture(
                         ContextCompat.getMainExecutor(context),
@@ -197,11 +213,17 @@ private fun CameraView(vm: CameraViewModel) {
                         },
                     )
                 }
-                if (vm.mode == CameraMode.Pdf && vm.pdfPages.isNotEmpty()) {
-                    Button(
-                        onClick = vm::finishPdf,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                    ) { Text("Submit ${vm.pdfPages.size}") }
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 28.dp) // a bit in from the edge
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.5.dp, Color.White, RoundedCornerShape(14.dp))
+                        .clickable { vm.openSaved() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(ZsIcons.Folder, contentDescription = "Saved", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -298,7 +320,6 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
         )
         return
     }
-    var toDelete by remember { mutableStateOf<SavedDoc?>(null) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = NavClearance),
@@ -313,52 +334,82 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
             )
         }
         items(docs, key = { it.file.name }) { doc ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(ZsColors.Surface)
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                DocThumb(doc)
-                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                    Text(doc.file.nameWithoutExtension, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        (if (doc.isPublic) "Public · " else "Private · ") +
-                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(doc.file.lastModified())),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (doc.isPublic) Color.White else ZsColors.Secondary,
-                    )
-                    Text(
-                        "Delete",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ZsColors.Secondary,
-                        modifier = Modifier.padding(top = 6.dp).clickable { toDelete = doc },
+            SwipeToRevealDelete(onDelete = { vm.delete(doc) }) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(ZsColors.Surface)
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DocThumb(doc)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(doc.file.nameWithoutExtension, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            (if (doc.isPublic) "Public · " else "Private · ") +
+                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(doc.file.lastModified())),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (doc.isPublic) Color.White else ZsColors.Secondary,
+                        )
+                    }
+                    Switch(
+                        checked = doc.isPublic,
+                        onCheckedChange = { vm.setPublic(doc, it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = Color.White,
+                            uncheckedThumbColor = ZsColors.Secondary,
+                            uncheckedTrackColor = Color.Black,
+                            uncheckedBorderColor = ZsColors.Secondary,
+                        ),
                     )
                 }
-                Switch(
-                    checked = doc.isPublic,
-                    onCheckedChange = { vm.setPublic(doc, it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = Color.White,
-                        uncheckedThumbColor = ZsColors.Secondary,
-                        uncheckedTrackColor = Color.Black,
-                        uncheckedBorderColor = ZsColors.Secondary,
-                    ),
-                )
             }
         }
     }
-    toDelete?.let { doc ->
-        AlertDialog(
-            onDismissRequest = { toDelete = null },
-            containerColor = ZsColors.Surface,
-            title = { Text("Delete ${doc.file.name}?", color = Color.White) },
-            confirmButton = { TextButton(onClick = { vm.delete(doc); toDelete = null }) { Text("Delete", color = Color.White) } },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel", color = ZsColors.Secondary) } },
-        )
+}
+
+/** Red delete: the one color exception, user-approved 2026-10-21 (danger action). */
+private val DeleteRed = Color(0xFFD32F2F)
+private val DeleteWidth = 88.dp
+
+/**
+ * Two-step delete. Swipe the row left: a red trash button shows on the right.
+ * Tap it to delete; swipe back right to hide it. Swiping alone never deletes.
+ */
+@Composable
+private fun SwipeToRevealDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        if (open) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(width = DeleteWidth - 8.dp, height = 60.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(DeleteRed)
+                    .clickable(onClick = onDelete),
+                contentAlignment = Alignment.Center,
+            ) { Icon(ZsIcons.Delete, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(26.dp)) }
+        }
+        Box(
+            Modifier
+                .offset(x = if (open) -DeleteWidth else 0.dp)
+                .pointerInput(Unit) {
+                    var dx = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dx = 0f },
+                        onDragEnd = {
+                            if (dx < -40.dp.toPx()) open = true
+                            if (dx > 40.dp.toPx()) open = false
+                        },
+                    ) { change, amount ->
+                        change.consume()
+                        dx += amount
+                    }
+                },
+        ) { content() }
     }
 }
 

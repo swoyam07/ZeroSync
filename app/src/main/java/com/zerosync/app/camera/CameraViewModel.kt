@@ -28,6 +28,16 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
 
     var mode by mutableStateOf(CameraMode.Passport)
 
+    /** Camera mode to return to when leaving Saved. */
+    val lastCameraMode: CameraMode get() = _lastCameraMode
+    private var _lastCameraMode = CameraMode.Passport
+
+    fun openSaved() {
+        _lastCameraMode = mode
+        mode = CameraMode.Saved
+        refresh()
+    }
+
     var saved by mutableStateOf(emptyList<SavedDoc>())
         private set
 
