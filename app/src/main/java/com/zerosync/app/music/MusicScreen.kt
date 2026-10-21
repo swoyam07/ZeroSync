@@ -207,14 +207,15 @@ private fun Player(vm: MusicViewModel) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
             val wheel = min(maxWidth * 0.42f, 170.dp)
             Box(Modifier.fillMaxWidth().height(wheel * 1.35f)) {
-                Column(Modifier.align(Alignment.TopStart), horizontalAlignment = Alignment.CenterHorizontally) {
-                    RotaryWheel(
-                        icon = ZsIcons.Volume,
-                        description = "Volume wheel: turn clockwise for louder",
-                        onTick = vm::turnVolumeWheel,
-                        size = wheel,
+                Column(Modifier.align(Alignment.TopStart).padding(start = 24.dp, top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Hold, drag right, then move up/down = volume. Left does nothing yet.
+                    VolumeButton(
+                        description = "Volume button: hold, drag right, then move up for louder or down for quieter",
+                        volume = vm.volume,
+                        maxVolume = vm.maxVolume,
+                        onVolumeStep = vm::turnVolumeWheel,
+                        size = min(wheel * 0.45f, 72.dp),
                     )
-                    WheelLabel("Volume ${vm.volume}/${vm.maxVolume}")
                 }
                 Column(
                     Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp),
@@ -244,7 +245,6 @@ private fun Player(vm: MusicViewModel) {
                         onDownRelease = { picked = null },
                         size = min(wheel * 0.45f, 72.dp),
                     )
-                    WheelLabel("Song ${shown + 1}/${songs.size}")
                 }
             }
         }
