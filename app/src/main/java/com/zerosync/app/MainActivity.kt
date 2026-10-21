@@ -46,6 +46,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zerosync.app.gallery.GalleryScreen
 import com.zerosync.app.gallery.GalleryViewModel
 import com.zerosync.app.ui.AppTab
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import com.zerosync.app.ui.ZsIcons
 import com.zerosync.app.ui.PillNavBar
 import com.zerosync.app.ui.theme.ZeroSyncTheme
 import com.zerosync.app.ui.theme.ZsColors
@@ -71,12 +80,29 @@ private fun ZeroSyncApp() {
     // While locked, ONLY the music player is shown: no nav bar, no other tabs (privacy).
     val activity = LocalActivity.current
     val locked = rememberKeyguardLocked()
-    val allowOverLock = tab == AppTab.Music && music.isPlaying
-    LaunchedEffect(allowOverLock) { activity?.setShowWhenLocked(allowOverLock) }
+    // playRequested (not isPlaying): isPlaying blinks off while the next song loads, which
+    // used to drop the app to the lock screen and back. Also, once shown over the lock
+    // screen, stay there until unlocked (pausing on the lock screen won't kick you out).
+    var shownOverLock by remember { mutableStateOf(false) }
+    val allowOverLock = tab == AppTab.Music && (music.playRequested || (locked && shownOverLock))
+    LaunchedEffect(allowOverLock) {
+        activity?.setShowWhenLocked(allowOverLock)
+        shownOverLock = allowOverLock
+    }
     val lockedPlayer = locked && allowOverLock
 
     // Music keeps playing when leaving the app (home / app switch / screen off).
     // It stops when the app is cleared from recents (the player is released with the app).
+    // Opening recents always stops the screen first, so save the song + time there; the
+    // next launch reopens on that song, paused.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) music.saveLastSpot()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val fullScreen = (tab == AppTab.Gallery && gallery.isFullScreen) || lockedPlayer
 
@@ -103,6 +129,32 @@ private fun ZeroSyncApp() {
                 color = ZsColors.OnSurface.copy(alpha = 0.6f),
                 modifier = Modifier.align(Alignment.Center),
             )
+        }
+
+        // On the lock screen: the under-display fingerprint sensor sits at the bottom centre.
+        // Android does not read the sensor while an app covers the lock screen, so this
+        // invisible zone over it asks for unlock the moment a finger lands. The system's
+        // fingerprint check then reads the finger still resting on the sensor. After
+        // unlocking, the music player stays open (not the home screen).
+        if (lockedPlayer) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .width(160.dp)
+                    .height(150.dp)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            activity?.let {
+                                it.getSystemService(KeyguardManager::class.java)?.requestDismissKeyguard(it, null)
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                // Faint hint of where to put the finger.
+                Icon(ZsIcons.Unlock, contentDescription = "Unlock: place finger here", tint = Color.White.copy(alpha = 0.25f), modifier = Modifier.size(22.dp))
+            }
         }
 
         if (!fullScreen) {

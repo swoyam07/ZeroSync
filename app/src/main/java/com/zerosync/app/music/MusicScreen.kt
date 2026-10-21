@@ -128,7 +128,6 @@ private fun Player(vm: MusicViewModel) {
             .padding(top = 12.dp, bottom = NavBarClearance),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        FolderDropdown(vm)
 
         // Big round cover with the time bar wrapped around it as a ring of bars (sound wave).
         // Tapping the cover of a picked (not yet playing) song starts it.
@@ -313,56 +312,6 @@ private fun FolderPicker(names: List<String>, highlighted: Int) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
-/** Pill button showing the current folder; tap to pick another (only its songs play). */
-@Composable
-private fun FolderDropdown(vm: MusicViewModel) {
-    var open by remember { mutableStateOf(false) }
-    Box(Modifier.padding(bottom = 16.dp)) {
-        Row(
-            Modifier
-                .clip(CircleShape)
-                .background(Color.Black)
-                .border(1.5.dp, Brush.horizontalGradient(listOf(ZsColors.Primary, ZsColors.Secondary)), CircleShape)
-                .clickable { open = true }
-                .padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(ZsIcons.Folder, contentDescription = null, tint = ZsColors.Primary, modifier = Modifier.size(18.dp))
-            Text(
-                vm.selectedFolder?.name ?: "Folder",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 8.dp).widthIn(max = 200.dp),
-            )
-            Icon(ZsIcons.DropDown, contentDescription = "Choose folder", tint = Color.White)
-        }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = ZsColors.Surface,
-        ) {
-            vm.folders.forEach { folder ->
-                val active = folder.id == vm.selectedFolderId
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            "${folder.name}  ·  ${folder.songs.size}",
-                            color = if (active) ZsColors.Primary else Color.White,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                    },
-                    onClick = {
-                        open = false
-                        if (!active) vm.selectFolder(folder.id)
-                    },
-                )
             }
         }
     }

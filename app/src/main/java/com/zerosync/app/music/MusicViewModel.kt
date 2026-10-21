@@ -66,6 +66,9 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var isPlaying by mutableStateOf(false)
         private set
+    /** User wants music playing. Unlike [isPlaying], stays true while the next song loads. */
+    var playRequested by mutableStateOf(false)
+        private set
 
     /** Song shown while the song wheel is being turned (plays on release). Null = not turning. */
     var previewIndex by mutableStateOf<Int?>(null)
@@ -87,7 +90,15 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
             override fun onEvents(player: Player, events: Player.Events) {
                 currentIndex = player.currentMediaItemIndex.coerceAtLeast(0)
                 isPlaying = player.isPlaying
+                playRequested = player.playWhenReady
                 refreshPosition()
+                // Remember the spot on song change, play/pause and seeks (not on every tick).
+                if (events.containsAny(
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_IS_PLAYING_CHANGED,
+                        Player.EVENT_POSITION_DISCONTINUITY,
+                    )
+                ) saveLastSpot()
             }
         })
     }
@@ -102,6 +113,8 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
                     folders = loaded
                     // Keep the picked folder if it still exists, else the first folder.
                     val keep = loaded.find { it.id == selectedFolderId } ?: loaded.firstOrNull()
+                    // First load after opening the app: go back to the last song, paused.
+                    if (playingFolderId == null && restoreLastSpot(loaded)) return@launch
                     if (keep?.id != selectedFolderId) selectFolder(keep?.id ?: return@launch, autoPlay = false)
                     // Songs of the playing folder changed on disk: reload it (paused).
                     val playing = loaded.find { it.id == playingFolderId }
@@ -130,9 +143,9 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Put a folder's songs in the player, at song [index], paused. */
-    private fun loadIntoPlayer(folder: MusicFolder, index: Int) {
+    private fun loadIntoPlayer(folder: MusicFolder, index: Int, positionMs: Long = 0L) {
         playingFolderId = folder.id
-        player.setMediaItems(folder.songs.map { MediaItem.fromUri(it.uri) }, index, 0L)
+        player.setMediaItems(folder.songs.map { MediaItem.fromUri(it.uri) }, index, positionMs)
         player.prepare()
         player.pause()
     }
@@ -196,6 +209,30 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
             player.pause()
             sleepMinutes = null
         }
+    }
+
+    // Last song + time, kept in the app's private storage (backups are off, nothing leaves).
+    private val lastSpot = app.getSharedPreferences("music_last_spot", android.content.Context.MODE_PRIVATE)
+
+    fun saveLastSpot() {
+        val folder = folders.find { it.id == playingFolderId } ?: return
+        val song = folder.songs.getOrNull(player.currentMediaItemIndex) ?: return
+        lastSpot.edit()
+            .putLong("folder", folder.id)
+            .putLong("song", song.id)
+            .putLong("position", player.currentPosition.coerceAtLeast(0L))
+            .apply()
+    }
+
+    /** Load the saved song at its saved time, paused. False if nothing saved or it's gone. */
+    private fun restoreLastSpot(loaded: List<MusicFolder>): Boolean {
+        val folder = loaded.find { it.id == lastSpot.getLong("folder", -1L) } ?: return false
+        val index = folder.songs.indexOfFirst { it.id == lastSpot.getLong("song", -1L) }
+        if (index < 0) return false
+        selectedFolderId = folder.id
+        previewIndex = null
+        loadIntoPlayer(folder, index, lastSpot.getLong("position", 0L))
+        return true
     }
 
     fun playPause() {
