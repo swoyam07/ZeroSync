@@ -10,7 +10,7 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
 - Title (large) + artist (small).
 - Timestamp bar: current time · seek bar · total time. Drag to jump. Updates ~2×/s only
   while playing and the app is on screen.
-- Previous · Play/Pause (big lilac circle) · Next.
+- Previous · Play/Pause (big white circle) · Next.
 - Two dials at the bottom, above the nav bar:
   - Left (raised): volume wheel. Each 30° tick = one system volume step + vibration.
   - Right (lower): song wheel. Each 30° tick = next/previous song shown + vibration;

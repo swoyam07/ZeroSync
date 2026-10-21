@@ -9,13 +9,13 @@
     <!-- Ring half: top-right gap to bottom-left gap, clockwise. -->
     <path
         android:pathData="M76.52,41 A26,26 0 0,1 41,76.52"
-        android:strokeColor="#C19EE0"
+        android:strokeColor="#FFFFFF"
         android:strokeWidth="5"
         android:strokeLineCap="round" />
     <!-- Ring half: bottom-left gap to top-right gap. -->
     <path
         android:pathData="M31.48,67 A26,26 0 0,1 67,31.48"
-        android:strokeColor="#9163CB"
+        android:strokeColor="#8A8A8A"
         android:strokeWidth="5"
         android:strokeLineCap="round" />
     <!-- Z: top bar, long diagonal through both gaps, bottom bar. -->

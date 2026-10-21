@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.zerosync.app.ui.ZsIcons
 import com.zerosync.app.ui.theme.ZsColors
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
@@ -60,6 +62,9 @@ fun VolumeButton(
     val currentOnLeft by rememberUpdatedState(onLeft)
     val currentMax by rememberUpdatedState(maxVolume)
     var mode by remember { mutableStateOf(VolMode.Idle) }
+    val pop = rememberMenuPop(mode == VolMode.Menu)
+    // Same order as TwoParts: right = volume, left = empty for now.
+    val menuIcons = listOf(rememberVectorPainter(ZsIcons.Volume), null)
 
     Canvas(
         modifier
@@ -127,12 +132,7 @@ fun VolumeButton(
 
         when (mode) {
             VolMode.Menu -> {
-                // Outer circle split into left and right halves by a vertical line.
-                drawCircle(Color.Black, bigRadius)
-                drawCircle(outline, bigRadius, style = Stroke(1.5.dp.toPx()))
-                drawLine(line, center + Offset(0f, -bigRadius), center + Offset(0f, -radius), strokeWidth = 1.5.dp.toPx())
-                drawLine(line, center + Offset(0f, radius), center + Offset(0f, bigRadius), strokeWidth = 1.5.dp.toPx())
-                drawCircle(outline, radius, style = Stroke(1.5.dp.toPx()))
+                drawHoldMenu(radius, TwoParts, menuIcons, pop)
             }
             VolMode.Volume -> {
                 // Like the sketch: the button, plus a curved bar on its right.
@@ -151,7 +151,7 @@ fun VolumeButton(
                 }
             }
             VolMode.Idle -> {
-                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1420), Color.Black)), radius)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
             }
         }

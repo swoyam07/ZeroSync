@@ -22,7 +22,7 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
   for the default-dialer role), no ContentProviders, no share intents, backups disabled.
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
-- No animations by default. No background work, services, or polling unless approved.
+- No animations by default. Approved exception: 120 ms pop-in of the music hold menu. No background work, services, or polling unless approved.
 - Prefer Android/Jetpack built-ins over third-party packages.
 - Adaptive layouts only; never hardcode screen pixel sizes.
 - Handle backgrounding, process death, config changes, low memory.

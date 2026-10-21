@@ -7,7 +7,7 @@ Status: v0.2 implemented (code in `app/src/main/java/com/zerosync/app/gallery/`)
   always random order in cycles: every video plays once per cycle (no repeats), then a new
   random cycle starts (never the same video twice in a row). Pill switch + toggle overlay the video.
 - Feed is true full screen: video fills the screen (cropped, no black bars), system bars hidden
-  (swipe from edge to peek). Nav bar uses high-contrast colors (white icons, lilac border/active).
+  (swipe from edge to peek). Nav bar uses high-contrast colors (white icons, white/gray border/active).
 - Folders: phone folders that contain videos (auto-detected), shown 2 per row as big square
   covers with the name below (no counts) → pick folder → its videos (grid)
   → tap → vertical feed in folder order.
@@ -17,7 +17,7 @@ Status: v0.2 implemented (code in `app/src/main/java/com/zerosync/app/gallery/`)
 - Play order (shuffle icon / numbered-list icon): OFF by default = random; on = sequential
   (Shuffle: newest first; Folders: folder order). Applies to both feeds. Toggling keeps the
   current video first (it restarts) and reorders the rest.
-- Round 48dp toggles: filled lilac = on, dark with white icon = off.
+- Round 48dp toggles: filled white = on, dark with white icon = off.
 
 ## Technical notes
 - Source: Android `MediaStore` videos (no paths, no database). Folders = MediaStore buckets.

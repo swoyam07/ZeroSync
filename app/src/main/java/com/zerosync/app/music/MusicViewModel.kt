@@ -152,6 +152,28 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         player.repeatMode = if (repeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
+    /** Time picked with the button's left scrub (ms). Music keeps playing; applied on release. */
+    var scrubMs by mutableStateOf<Long?>(null)
+        private set
+    private var scrubFromMs = 0L
+
+    fun startScrub() {
+        refreshPosition()
+        scrubFromMs = positionMs
+        scrubMs = positionMs
+    }
+
+    /** [share] = finger travel as a share of the whole song (+ forward, - back). */
+    fun moveScrub(share: Float) {
+        if (durationMs <= 0) return
+        scrubMs = (scrubFromMs + (share * durationMs).toLong()).coerceIn(0L, durationMs)
+    }
+
+    fun endScrub() {
+        scrubMs?.let { seekTo(it) }
+        scrubMs = null
+    }
+
     fun playPause() {
         // A picked song or another folder is waiting: start it (replaces what plays now).
         if (startPending) return releaseSongWheel()

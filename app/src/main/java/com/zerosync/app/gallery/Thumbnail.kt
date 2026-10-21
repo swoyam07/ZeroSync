@@ -43,7 +43,7 @@ fun Thumbnail(
     sizePx: Int = 256,
     contentScale: ContentScale = ContentScale.Crop,
     /** Shown until (or if never) the thumbnail loads. Transparent lets content behind show through. */
-    placeholder: Color = Color(0xFF0E0B12),
+    placeholder: Color = Color(0xFF0E0E0E),
 ) {
     val resolver = LocalContext.current.contentResolver
     val key = "$uri@$sizePx"

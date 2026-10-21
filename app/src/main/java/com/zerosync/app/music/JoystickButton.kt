@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.zerosync.app.ui.ZsIcons
 import com.zerosync.app.ui.theme.ZsColors
 import kotlin.math.PI
 import kotlin.math.abs
@@ -38,7 +40,10 @@ enum class SwipeDirection { Up, Down, Left, Right }
 private const val STEP_DEGREES = 30f
 
 /** What the button is showing right now. */
-private enum class Mode { Idle, Menu, Dial, Picker }
+private enum class Mode { Idle, Menu, Dial, Picker, Seek }
+
+/** Finger travel (up/down) that moves the time through the whole song. */
+private val SEEK_TRAVEL = 200.dp
 
 /** Finger travel (up/down) that moves the folder cursor by one. */
 private val PICKER_STEP = 48.dp
@@ -52,7 +57,8 @@ private val PICKER_STEP = 48.dp
  *    - Down: folder picker. [onDownStart] once, then [onDownMove] with how many steps the finger
  *      has moved since (each [PICKER_STEP]; up = negative). Lift = [onDownRelease].
  *    - Right: the same dial, but it only picks: [onRightTick] per step, [onRightRelease] on lift.
- *    - Left: [onSwipe] fires once (does nothing yet; for future features).
+ *    - Left: time scrub. [onLeftStart] once, then [onLeftMove] with how far the finger moved
+ *      (share of the whole song, up = forward, down = back). Lift = [onLeftRelease].
  * 3. Lift your finger: everything closes and the plain button is back.
  */
 @Composable
@@ -68,6 +74,9 @@ fun JoystickButton(
     onDownRelease: () -> Unit = {},
     onRightTick: (Int) -> Unit = {},
     onRightRelease: () -> Unit = {},
+    onLeftStart: () -> Unit = {},
+    onLeftMove: (Float) -> Unit = {},
+    onLeftRelease: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
     val currentOnUpTick by rememberUpdatedState(onUpTick)
@@ -78,7 +87,18 @@ fun JoystickButton(
     val currentOnDownRelease by rememberUpdatedState(onDownRelease)
     val currentOnRightTick by rememberUpdatedState(onRightTick)
     val currentOnRightRelease by rememberUpdatedState(onRightRelease)
+    val currentOnLeftStart by rememberUpdatedState(onLeftStart)
+    val currentOnLeftMove by rememberUpdatedState(onLeftMove)
+    val currentOnLeftRelease by rememberUpdatedState(onLeftRelease)
     var mode by remember { mutableStateOf(Mode.Idle) }
+    val pop = rememberMenuPop(mode == Mode.Menu)
+    // Same order as FourParts: up = play a song, right = pick a song, down = folder, left = time.
+    val menuIcons = listOf(
+        rememberVectorPainter(ZsIcons.Play),
+        rememberVectorPainter(ZsIcons.Music),
+        rememberVectorPainter(ZsIcons.Folder),
+        rememberVectorPainter(ZsIcons.Clock),
+    )
     var markerDegrees by remember { mutableFloatStateOf(0f) }
 
     Canvas(
@@ -137,6 +157,10 @@ fun JoystickButton(
                                     pickerStartY = p.y
                                     pickerSteps = 0
                                     currentOnDownStart()
+                                } else if (part == SwipeDirection.Left) {
+                                    mode = Mode.Seek
+                                    pickerStartY = p.y
+                                    currentOnLeftStart()
                                 } else {
                                     currentOnSwipe(part)
                                     mode = Mode.Idle // other parts: one action, then done until next hold
@@ -172,9 +196,11 @@ fun JoystickButton(
                                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 }
                             }
+                            Mode.Seek -> currentOnLeftMove((pickerStartY - p.y) / SEEK_TRAVEL.toPx())
                             Mode.Idle -> Unit
                         }
                     }
+                    if (mode == Mode.Seek) currentOnLeftRelease()
                     if (mode == Mode.Dial) {
                         if (dialPart == SwipeDirection.Up) currentOnUpRelease() else currentOnRightRelease()
                     }
@@ -191,15 +217,8 @@ fun JoystickButton(
 
         when (mode) {
             Mode.Menu -> {
-                // Like the sketch: outer circle, centre circle, 4 dividing lines on the diagonals.
-                drawCircle(Color.Black, bigRadius)
-                drawCircle(outline, bigRadius, style = Stroke(1.5.dp.toPx()))
-                for (deg in listOf(45f, 135f, 225f, 315f)) {
-                    val a = deg * PI.toFloat() / 180f
-                    val dir = Offset(cos(a), sin(a))
-                    drawLine(line, center + dir * radius, center + dir * bigRadius, strokeWidth = 1.5.dp.toPx())
-                }
-                drawCircle(outline, radius, style = Stroke(1.5.dp.toPx()))
+                // Like the sketch: centre circle + 4 separate curved pads (up, right, down, left).
+                drawHoldMenu(radius, FourParts, menuIcons, pop)
             }
             Mode.Dial -> {
                 drawCircle(Color.Black, bigRadius)
@@ -213,8 +232,8 @@ fun JoystickButton(
                 drawCircle(ZsColors.Primary, radius = 8.dp.toPx(), center = center + Offset(cos(m), sin(m)) * (bigRadius - 24.dp.toPx()))
             }
             // Picker: the folder boxes are drawn by the screen; the button stays plain.
-            Mode.Idle, Mode.Picker -> {
-                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1420), Color.Black)), radius)
+            Mode.Idle, Mode.Picker, Mode.Seek -> {
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
             }
         }

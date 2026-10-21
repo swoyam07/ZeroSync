@@ -6,13 +6,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 object ZsColors {
-    val Primary = Color(0xFFC19EE0)          // links, active nav icons, brand
-    val PrimaryContainer = Color(0xFF6247AA) // active tabs, toggles, selected cards
-    val Secondary = Color(0xFF9163CB)        // secondary buttons, chips, outlines
-    val Tertiary = Color(0xFFDEC9E9)         // FABs, badges, progress only
+    // Black, white and grays only. No other colors anywhere in the UI.
+    val Primary = Color(0xFFFFFFFF)          // links, active nav icons, brand, "on" states
+    val PrimaryContainer = Color(0xFF3A3A3A) // active tabs, toggles, selected cards
+    val Secondary = Color(0xFF8A8A8A)        // secondary buttons, chips, outlines
+    val Tertiary = Color(0xFFD0D0D0)         // FABs, badges, progress only
     val Background = Color(0xFF000000)
-    val Surface = Color(0xFF141018)          // raised pills/bars on pure black
-    val OnSurface = Color(0xFFE6E0EA)
+    val Surface = Color(0xFF141414)          // raised pills/bars on pure black
+    val OnSurface = Color(0xFFE6E6E6)
 }
 
 private val ZeroSyncScheme = darkColorScheme(

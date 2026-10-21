@@ -6,6 +6,20 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.atan2
+import kotlin.math.cos
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerInputScope
+import kotlin.math.sin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -113,25 +127,21 @@ private fun Player(vm: MusicViewModel) {
     ) {
         FolderDropdown(vm)
 
-        // Cover carousel: previous (small) · current (big) · next (small).
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Cover(
-                songs[Math.floorMod(shown - 1, songs.size)],
-                Modifier.weight(0.22f).padding(end = 12.dp).clickable { vm.previous() },
-                dim = true,
-            )
-            // Tapping the big cover of a picked (not yet playing) song starts it.
-            Cover(song, Modifier.weight(0.5f).clickable(enabled = vm.startPending, onClick = vm::playPause))
-            Cover(
-                songs[Math.floorMod(shown + 1, songs.size)],
-                Modifier.weight(0.22f).padding(start = 12.dp).clickable { vm.next() },
-                dim = true,
-            )
+        // Big round cover with the time bar wrapped around it as a ring of bars (sound wave).
+        // Tapping the cover of a picked (not yet playing) song starts it.
+        Box(Modifier.fillMaxWidth(0.86f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+            // Ring first, cover on top, so taps on the cover reach the cover.
+            WaveformRing(vm, seed = song.id, Modifier.fillMaxSize())
+            Cover(song, Modifier.fillMaxSize(0.74f).clickable(enabled = vm.startPending, onClick = vm::playPause))
         }
+
+        // Numbers under the cover: elapsed | total.
+        Text(
+            "${formatTime(vm.scrubMs ?: vm.positionMs)}  |  ${formatTime(vm.durationMs)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = ZsColors.OnSurface.copy(alpha = 0.7f),
+            modifier = Modifier.padding(top = 10.dp),
+        )
 
         Text(
             song.title,
@@ -141,7 +151,7 @@ private fun Player(vm: MusicViewModel) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp),
         )
         Text(
             song.artist,
@@ -151,8 +161,6 @@ private fun Player(vm: MusicViewModel) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
-
-        TimestampBar(vm)
 
         // Shuffle · Previous · Play/Pause · Next · Loop
         Row(
@@ -207,7 +215,7 @@ private fun Player(vm: MusicViewModel) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
             val wheel = min(maxWidth * 0.42f, 170.dp)
             Box(Modifier.fillMaxWidth().height(wheel * 1.35f)) {
-                Column(Modifier.align(Alignment.TopStart).padding(start = 24.dp, top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     // Hold, drag right, then move up/down = volume. Left does nothing yet.
                     VolumeButton(
                         description = "Volume button: hold, drag right, then move up for louder or down for quieter",
@@ -218,7 +226,7 @@ private fun Player(vm: MusicViewModel) {
                     )
                 }
                 Column(
-                    Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp),
+                    Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     // Hold, then: up + circle = pick a song; down + move = pick a folder.
@@ -243,6 +251,10 @@ private fun Player(vm: MusicViewModel) {
                         onRightTick = vm::turnSongWheel,
                         // No autoplay after a folder change; the user presses play.
                         onDownRelease = { picked = null },
+                        // Left + move up/down: scrub the time; music keeps playing, jumps on lift.
+                        onLeftStart = vm::startScrub,
+                        onLeftMove = vm::moveScrub,
+                        onLeftRelease = vm::endScrub,
                         size = min(wheel * 0.45f, 72.dp),
                     )
                 }
@@ -333,8 +345,14 @@ private fun FolderDropdown(vm: MusicViewModel) {
 }
 
 /** Seek bar with current time and total time. Drag to jump within the song. */
+/**
+ * Time bar drawn as bars pointing outward all around the cover (like a sound wave).
+ * Starts at the top, goes clockwise. Played part = lilac, rest = dim.
+ * Bar heights are made up from the song id, so each song has its own fixed pattern.
+ * Tap or drag along the ring to jump; the song jumps when the finger lifts.
+ */
 @Composable
-private fun TimestampBar(vm: MusicViewModel) {
+private fun WaveformRing(vm: MusicViewModel, seed: Long, modifier: Modifier) {
     // Move the bar about twice a second, only while playing and the app is on screen.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(vm.isPlaying) {
@@ -346,31 +364,55 @@ private fun TimestampBar(vm: MusicViewModel) {
             }
         }
     }
-    // While dragging, show the finger's position; seek when released.
     var dragMs by remember { mutableStateOf<Float?>(null) }
     val duration = vm.durationMs.coerceAtLeast(1L).toFloat()
-    val shownMs = dragMs ?: vm.positionMs.toFloat().coerceAtMost(duration)
+    val shownMs = dragMs ?: (vm.scrubMs ?: vm.positionMs).toFloat().coerceAtMost(duration)
+    val heights = remember(seed) { val rnd = java.util.Random(seed); List(90) { 0.25f + rnd.nextFloat() * 0.75f } }
+    // Latest values for the touch handlers (they are set up once).
+    val currentDuration by rememberUpdatedState(duration)
+    val currentEnabled by rememberUpdatedState(vm.durationMs > 0)
+    val currentSeek by rememberUpdatedState<(Long) -> Unit>(vm::seekTo)
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-        Slider(
-            value = shownMs,
-            onValueChange = { dragMs = it },
-            onValueChangeFinished = {
-                dragMs?.let { vm.seekTo(it.toLong()) }
-                dragMs = null
+    // Only touches on the ring count (not on the cover in the middle).
+    fun PointerInputScope.onRing(p: Offset) = (p - Offset(size.width / 2f, size.height / 2f)).getDistance() > size.width * 0.37f
+    // Angle from the top, clockwise, as a share of the song.
+    fun PointerInputScope.msAt(p: Offset): Float {
+        val deg = Math.toDegrees(atan2((p.x - size.width / 2f).toDouble(), -(p.y - size.height / 2f).toDouble()))
+        return (((deg + 360) % 360) / 360f).toFloat() * currentDuration
+    }
+
+    Canvas(
+        modifier
+            .pointerInput(Unit) {
+                detectTapGestures { if (currentEnabled && onRing(it)) currentSeek(msAt(it).toLong()) }
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    if (!currentEnabled || !onRing(down.position)) return@awaitEachGesture
+                    while (true) {
+                        val change = awaitPointerEvent().changes.first()
+                        if (!change.pressed) break
+                        if (change.position != down.position) {
+                            change.consume()
+                            dragMs = msAt(change.position)
+                        }
+                    }
+                    dragMs?.let { currentSeek(it.toLong()) }
+                    dragMs = null
+                }
             },
-            valueRange = 0f..duration,
-            enabled = vm.durationMs > 0,
-            colors = SliderDefaults.colors(
-                thumbColor = ZsColors.Primary,
-                activeTrackColor = ZsColors.Primary,
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f),
-            ),
-        )
-        Row(Modifier.fillMaxWidth()) {
-            Text(formatTime(shownMs.toLong()), style = MaterialTheme.typography.labelSmall, color = ZsColors.OnSurface.copy(alpha = 0.7f))
-            Spacer(Modifier.weight(1f))
-            Text(formatTime(vm.durationMs), style = MaterialTheme.typography.labelSmall, color = ZsColors.OnSurface.copy(alpha = 0.7f))
+    ) {
+        val n = heights.size
+        val inner = size.minDimension * 0.39f // just outside the cover
+        val maxLen = size.minDimension * 0.10f
+        val w = 2.5.dp.toPx()
+        val played = shownMs / duration
+        heights.forEachIndexed { i, h ->
+            val a = Math.toRadians(i * 360.0 / n - 90.0)
+            val dir = Offset(cos(a).toFloat(), sin(a).toFloat())
+            val color = if ((i + 0.5f) / n <= played) ZsColors.Primary else Color.White.copy(alpha = 0.2f)
+            drawLine(color, center + dir * inner, center + dir * (inner + maxLen * h), w, StrokeCap.Round)
         }
     }
 }
@@ -384,12 +426,12 @@ private fun formatTime(ms: Long): String {
 /** Album cover, or a music-note placeholder when the song has none. */
 @Composable
 private fun Cover(song: Song, modifier: Modifier, dim: Boolean = false) {
-    val shape = RoundedCornerShape(if (dim) 14.dp else 22.dp)
+    val shape = CircleShape
     Box(
         modifier
             .aspectRatio(1f)
             .clip(shape)
-            .background(Brush.linearGradient(listOf(ZsColors.PrimaryContainer, Color(0xFF1A1420))))
+            .background(Brush.linearGradient(listOf(ZsColors.PrimaryContainer, Color(0xFF1A1A1A))))
             .border(1.dp, ZsColors.Primary.copy(alpha = if (dim) 0.3f else 0.7f), shape),
         contentAlignment = Alignment.Center,
     ) {

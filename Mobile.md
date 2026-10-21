@@ -32,23 +32,24 @@ UI:
     COLOR SYSTEM MAPPING
 
     Role: Primary Color
-    HEX Code: #C19EE0
-    Tone: Soft Mid-Lavender
+    (Monochrome only since 2026-10-21: black, white and grays. No other colors.)
+    HEX Code: #FFFFFF
+    Tone: White
     Visual & Technical Purpose: High legibility on dark surfaces without visual glare. Used for primary text links, active navigation icons, and brand touches.
 
     Role: Primary Container
-    HEX Code: #6247AA
-    Tone: Deep Dark Purple
+    HEX Code: #3A3A3A
+    Tone: Dark Gray
     Visual & Technical Purpose: Muted background fill for active tabs, toggles, or selected cards against pure black backgrounds.
 
     Role: Secondary Color
-    HEX Code: #9163CB
-    Tone: Medium Violet
+    HEX Code: #8A8A8A
+    Tone: Mid Gray
     Visual & Technical Purpose: Used for secondary buttons, filter chips, outlined borders, and inactive/supporting controls.
 
     Role: Tertiary (Accent)
-    HEX Code: #DEC9E9
-    Tone: Light Pastel Lilac
+    HEX Code: #D0D0D0
+    Tone: Light Gray
     Visual & Technical Purpose: Highest luminance in your dark palette. Reserved for focal points: Floating Action Buttons (FABs), notification badges, and progress indicators.
 
     APP UI Layout

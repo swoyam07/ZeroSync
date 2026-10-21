@@ -62,7 +62,7 @@ fun RotaryWheel(
         modifier
             .size(size)
             .clip(CircleShape)
-            .background(Brush.radialGradient(listOf(Color(0xFF1A1420), Color.Black)))
+            .background(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)))
             .border(1.5.dp, Brush.verticalGradient(listOf(ZsColors.Primary, ZsColors.Secondary)), CircleShape)
             .semantics { contentDescription = description }
             .pointerInput(Unit) {
