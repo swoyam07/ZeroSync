@@ -20,6 +20,7 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
 - NEVER add the `INTERNET` permission. App must work fully offline.
 - No data in/out to other apps: no exported components (except those Android requires
   for the default-dialer role), no ContentProviders, no share intents, backups disabled.
+  Exception: Camera's per-file Public switch copies a file to shared storage (user-approved).
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
 - No animations by default. Approved exception: 120 ms pop-in of the music hold menu. No background work, services, or polling unless approved.

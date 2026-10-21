@@ -14,6 +14,10 @@
     <!-- Music: read songs (WAKE_LOCK above also keeps music playing with the screen off). -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
+    <!-- Camera: passport / ID / PDF capture. Files stay private until the user makes one public. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <!-- Offline by design: strip network permissions even if a library adds them.
          Without INTERNET, Android blocks every network socket for this app. -->
     <uses-permission

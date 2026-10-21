@@ -46,6 +46,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zerosync.app.gallery.GalleryScreen
 import com.zerosync.app.gallery.GalleryViewModel
 import com.zerosync.app.ui.AppTab
+import com.zerosync.app.camera.CameraScreen
+import com.zerosync.app.camera.CameraViewModel
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.pointerInput
@@ -126,6 +128,7 @@ private fun ZeroSyncApp() {
                 GalleryScreen(gallery)
             }
             AppTab.Music -> MusicScreen(music)
+            AppTab.Camera -> CameraScreen(viewModel<CameraViewModel>())
             else -> Text(
                 "${tab.label}: coming soon",
                 color = ZsColors.OnSurface.copy(alpha = 0.6f),

@@ -8,6 +8,8 @@
 | 2026-10-18 | Gallery storage | No database; scan MediaStore folders with videos | User choice, zero extra deps |
 | 2026-10-18 | Gallery priority | Smooth scroll with low resources | User choice |
 | 2026-10-18 | Thumbnails | Built-in loadThumbnail + LruCache (no Coil) | No extra library |
+| 2026-10-21 | Camera | Jetpack CameraX 1.5.0 + built-in PdfDocument | Official, offline, simple; custom document frames |
+| 2026-10-21 | Camera privacy | Private by default; per-file Public switch copies to shared storage, off deletes it | User choice |
 | 2026-10-18 | Music playback | ExoPlayer in ViewModel; NO service/notification (media3-session removed) | User doesn't want a notification; screen-off play is enough |
 
 ## Open questions
@@ -16,7 +18,6 @@
 - Phone: "default call pick up" means full-screen answer UI, or auto-answer?
 - Contact long-press gesture: contact icon (not gallery)?
 - Word (.docx) viewer: no built-in option. Decide.
-- Camera document scan: ML Kit needs Play services. Decide.
 - Whole-gallery reads shared storage. OK as "read-in only"?
 
 ## Decided
