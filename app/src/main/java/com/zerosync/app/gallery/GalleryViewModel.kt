@@ -41,10 +41,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     private var allVideos = emptyList<MediaItem>()
 
-    var autoScroll by mutableStateOf(false)
+    // Feed settings survive closing the app (private prefs; backups are off, nothing leaves).
+    private val settings = app.getSharedPreferences("gallery_settings", android.content.Context.MODE_PRIVATE)
+
+    var autoScroll by mutableStateOf(settings.getBoolean("autoScroll", false))
+        private set
+
+    fun toggleAutoScroll() {
+        autoScroll = !autoScroll
+        settings.edit().putBoolean("autoScroll", autoScroll).apply()
+    }
 
     /** Play order for both feeds. Off (default) = random, on = sequential (newest first / folder order). */
-    var inOrder by mutableStateOf(false)
+    var inOrder by mutableStateOf(settings.getBoolean("inOrder", false))
         private set
 
     /** Bumped when a feed's list is rebuilt, so the screen restarts the feed at its first page. */
@@ -104,8 +113,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         shuffleFeed = shuffleFeed + next
     }
 
+    /**
+     * Tap a folder: start playing right away (no grid), using the feed settings:
+     * in order = its first video, random = a random one. Auto scroll applies as usual.
+     */
     fun openFolder(folder: VideoFolder) {
         currentFolder = folder
+        val first = (if (inOrder) folder.videos.firstOrNull() else folder.videos.randomOrNull()) ?: return
+        openVideo(first, folder.videos)
     }
 
     fun closeFolder() {
@@ -128,6 +143,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Switch random <-> sequential. The video on screen stays first; the rest follow the new order. */
     fun toggleOrder() {
         inOrder = !inOrder
+        settings.edit().putBoolean("inOrder", inOrder).apply()
         shuffleFeed.getOrNull(shuffleIndex)?.let { current ->
             shuffleFeed = startingWith(current, allVideos)
             shuffleIndex = 0
@@ -153,7 +169,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         return all.drop(i) + all.take(i)
     }
 
+    /** Back from a folder's feed goes straight to the folder list. */
     fun closeFeed() {
         feed = null
+        currentFolder = null
     }
 }

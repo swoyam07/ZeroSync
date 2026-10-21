@@ -46,8 +46,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.zerosync.app.ui.PillToggle
-import com.zerosync.app.ui.VerticalPill
 import com.zerosync.app.ui.ZsIcons
 import kotlinx.coroutines.launch
 
@@ -250,25 +248,15 @@ fun VideoFeed(
             Box(Modifier.align(Alignment.TopCenter)) { topCenter() }
         }
 
-        // Auto-scroll + order toggles near the right edge, ~65% down the screen: easy thumb reach.
-        VerticalPill(
-            Modifier
+        // Auto-scroll + order: two tap beads on a rail near the right edge, ~65% down.
+        FeedToggles(
+            autoScroll = autoScroll,
+            inOrder = inOrder,
+            onToggleAutoScroll = onToggleAutoScroll,
+            onToggleOrder = onToggleOrder,
+            modifier = Modifier
                 .align(BiasAlignment(horizontalBias = 1f, verticalBias = 0.3f))
-                // Close to the right edge for easy thumb reach.
-                .padding(end = 12.dp),
-        ) {
-            PillToggle(
-                enabled = autoScroll,
-                onToggle = onToggleAutoScroll,
-                icon = ZsIcons.AutoScroll,
-                description = if (autoScroll) "Auto scroll on" else "Auto scroll off",
-            )
-            PillToggle(
-                enabled = inOrder,
-                onToggle = onToggleOrder,
-                icon = if (inOrder) ZsIcons.InOrder else ZsIcons.Shuffle,
-                description = if (inOrder) "Playing in order" else "Playing in random order",
-            )
-        }
+                .padding(end = 16.dp),
+        )
     }
 }

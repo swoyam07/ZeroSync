@@ -9,15 +9,17 @@ Status: v0.2 implemented (code in `app/src/main/java/com/zerosync/app/gallery/`)
 - Feed is true full screen: video fills the screen (cropped, no black bars), system bars hidden
   (swipe from edge to peek). Nav bar uses high-contrast colors (white icons, white/gray border/active).
 - Folders: phone folders that contain videos (auto-detected), shown 2 per row as big square
-  covers with the name below (no counts) → pick folder → its videos (grid)
-  → tap → vertical feed in folder order.
+  covers with the name below (no counts) → tap folder → plays at once (in order = first video,
+  random = random video; same auto scroll / order settings as Shuffle). Back = folder list.
 
-## Feed controls (right side, ~65% down, 28dp from the edge)
-- Auto scroll (skip-next icon): on = next video when one ends; off = loop current video.
-- Play order (shuffle icon / numbered-list icon): OFF by default = random; on = sequential
-  (Shuffle: newest first; Folders: folder order). Applies to both feeds. Toggling keeps the
-  current video first (it restarts) and reorders the rest.
-- Round 48dp toggles: filled white = on, dark with white icon = off.
+## Feed controls (right side, ~65% down) — `FeedToggles.kt`
+- Two tap "beads" on a thin vertical rail (tap only, no drag). Hand-drawn glyphs, no stock icons:
+  auto scroll = two falling chevrons (on) / one bar (off, loops); order = 3 dots in a line (in
+  order) / scattered (random). On = solid white bead + black glyph; off = black + gray ring.
+- Auto scroll: on = next video when one ends; off = loop current video.
+- Play order: OFF by default = random; on = sequential (Shuffle: newest first; Folders: folder
+  order). Toggling keeps the current video first (it restarts) and reorders the rest.
+- Both settings are remembered after the app is cleared (private SharedPreferences).
 
 ## Technical notes
 - Source: Android `MediaStore` videos (no paths, no database). Folders = MediaStore buckets.
