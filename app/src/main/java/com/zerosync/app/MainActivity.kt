@@ -75,17 +75,8 @@ private fun ZeroSyncApp() {
     LaunchedEffect(allowOverLock) { activity?.setShowWhenLocked(allowOverLock) }
     val lockedPlayer = locked && allowOverLock
 
-    // Leaving the app with the screen on (home / app switch) pauses music.
-    // Screen off (power button) keeps it playing.
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val power = activity?.getSystemService(PowerManager::class.java)
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && power?.isInteractive == true) music.onAppLeft()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    // Music keeps playing when leaving the app (home / app switch / screen off).
+    // It stops when the app is cleared from recents (the player is released with the app).
 
     val fullScreen = (tab == AppTab.Gallery && gallery.isFullScreen) || lockedPlayer
 

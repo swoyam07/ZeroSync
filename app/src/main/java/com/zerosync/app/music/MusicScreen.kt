@@ -97,6 +97,13 @@ private fun Player(vm: MusicViewModel) {
     val shown = vm.shownIndex.coerceIn(0, songs.lastIndex)
     val song = songs[shown]
 
+    // Folder picker (hold, drag down). The list is turned so the current folder sits in the
+    // middle (same number of folders above and below). picked = highlighted row, null = closed.
+    var order by remember { mutableStateOf(emptyList<MusicFolder>()) }
+    var picked by remember { mutableStateOf<Int?>(null) }
+    val folders = vm.folders
+
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
@@ -117,7 +124,8 @@ private fun Player(vm: MusicViewModel) {
                 Modifier.weight(0.22f).padding(end = 12.dp).clickable { vm.previous() },
                 dim = true,
             )
-            Cover(song, Modifier.weight(0.5f))
+            // Tapping the big cover of a picked (not yet playing) song starts it.
+            Cover(song, Modifier.weight(0.5f).clickable(enabled = vm.startPending, onClick = vm::playPause))
             Cover(
                 songs[Math.floorMod(shown + 1, songs.size)],
                 Modifier.weight(0.22f).padding(start = 12.dp).clickable { vm.next() },
@@ -146,12 +154,21 @@ private fun Player(vm: MusicViewModel) {
 
         TimestampBar(vm)
 
-        // Previous · Play/Pause · Next
+        // Shuffle · Previous · Play/Pause · Next
         Row(
             Modifier.padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            IconButton(onClick = vm::toggleShuffle, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    ZsIcons.Shuffle,
+                    contentDescription = if (vm.shuffle) "Shuffle on" else "Shuffle off",
+                    // Lilac = on, dim = off.
+                    tint = if (vm.shuffle) ZsColors.Primary else Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(26.dp),
+                )
+            }
             IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) {
                 Icon(ZsIcons.SkipPrevious, contentDescription = "Previous song", tint = Color.White, modifier = Modifier.size(32.dp))
             }
@@ -164,8 +181,8 @@ private fun Player(vm: MusicViewModel) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    if (vm.isPlaying) ZsIcons.Pause else ZsIcons.Play,
-                    contentDescription = if (vm.isPlaying) "Pause" else "Play",
+                    if (vm.isPlaying && !vm.startPending) ZsIcons.Pause else ZsIcons.Play,
+                    contentDescription = if (vm.isPlaying && !vm.startPending) "Pause" else "Play",
                     tint = Color.Black,
                     modifier = Modifier.size(34.dp),
                 )
@@ -190,16 +207,67 @@ private fun Player(vm: MusicViewModel) {
                     )
                     WheelLabel("Volume ${vm.volume}/${vm.maxVolume}")
                 }
-                Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.CenterHorizontally) {
-                    RotaryWheel(
-                        icon = ZsIcons.Music,
-                        description = "Song wheel: turn to pick a song, lift to play",
-                        onTick = vm::turnSongWheel,
-                        onRelease = vm::releaseSongWheel,
-                        size = wheel,
+                Column(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Hold, then: up + circle = pick a song; down + move = pick a folder.
+                    // Left / right do nothing yet.
+                    JoystickButton(
+                        description = "Song button: hold, drag up and circle to pick a song, or drag down to pick a folder",
+                        onUpTick = vm::turnSongWheel,
+                        onUpRelease = vm::releaseSongWheel,
+                        onDownStart = {
+                            val current = folders.indexOfFirst { it.id == vm.selectedFolderId }.coerceAtLeast(0)
+                            val middle = folders.size / 2
+                            order = List(folders.size) { i -> folders[Math.floorMod(current - middle + i, folders.size)] }
+                            picked = middle
+                        },
+                        onDownMove = { steps ->
+                            // The folder changes right away while moving, like the song dial.
+                            val i = (folders.size / 2 + steps).coerceIn(0, order.lastIndex)
+                            picked = i
+                            order.getOrNull(i)?.let { if (it.id != vm.selectedFolderId) vm.selectFolder(it.id, autoPlay = false) }
+                        },
+                        // Right + circle: pick a song without playing it; the play button starts it.
+                        onRightTick = vm::turnSongWheel,
+                        // No autoplay after a folder change; the user presses play.
+                        onDownRelease = { picked = null },
+                        size = min(wheel * 0.45f, 72.dp),
                     )
                     WheelLabel("Song ${shown + 1}/${songs.size}")
                 }
+            }
+        }
+    }
+    picked?.let { FolderPicker(order.map { it.name }, it) }
+    }
+}
+
+/** Folder boxes shown while holding the button and dragging down. Highlighted = picked on lift. */
+@Composable
+private fun FolderPicker(names: List<String>, highlighted: Int) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.8f))
+            .padding(horizontal = 48.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        names.forEachIndexed { i, name ->
+            val active = i == highlighted
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (active) ZsColors.PrimaryContainer else Color.Black)
+                    .border(1.dp, if (active) ZsColors.Primary else ZsColors.Secondary, RoundedCornerShape(12.dp))
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

@@ -44,6 +44,15 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         private set
     val selectedFolder: MusicFolder? get() = folders.find { it.id == selectedFolderId }
 
+    /** Folder whose songs are loaded in the player. Can differ from the one on screen. */
+    private var playingFolderId by mutableStateOf<Long?>(null)
+
+    /** Looking at another folder than the one playing: its songs wait for the play button. */
+    val browsing: Boolean get() = selectedFolderId != playingFolderId
+
+    /** Play button should start the shown song (instead of pause/resume). */
+    val startPending: Boolean get() = previewIndex != null || browsing
+
     /** Songs of the selected folder = the playlist. */
     val songs: List<Song> get() = selectedFolder?.songs.orEmpty()
 
@@ -58,7 +67,7 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     /** Song shown while the song wheel is being turned (plays on release). Null = not turning. */
     var previewIndex by mutableStateOf<Int?>(null)
         private set
-    val shownIndex: Int get() = previewIndex ?: currentIndex
+    val shownIndex: Int get() = previewIndex ?: if (browsing) 0 else currentIndex
 
     // Timestamp bar.
     var positionMs by mutableLongStateOf(0L)
@@ -90,8 +99,11 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
                     folders = loaded
                     // Keep the picked folder if it still exists, else the first folder.
                     val keep = loaded.find { it.id == selectedFolderId } ?: loaded.firstOrNull()
-                    if (keep?.id != selectedFolderId || player.mediaItemCount != keep?.songs?.size) {
-                        selectFolder(keep?.id ?: return@launch, autoPlay = false)
+                    if (keep?.id != selectedFolderId) selectFolder(keep?.id ?: return@launch, autoPlay = false)
+                    // Songs of the playing folder changed on disk: reload it (paused).
+                    val playing = loaded.find { it.id == playingFolderId }
+                    if (playing == null || player.mediaItemCount != playing.songs.size) {
+                        loadIntoPlayer(keep ?: return@launch, 0)
                     }
                 }
             } finally {
@@ -100,22 +112,46 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Dropdown pick: load only that folder's songs, from its first song. */
+    /**
+     * Show a folder. autoPlay = true (dropdown): play it from its first song.
+     * autoPlay = false (button picker): only show it; the current song keeps playing.
+     */
     fun selectFolder(id: Long, autoPlay: Boolean = true) {
         val folder = folders.find { it.id == id } ?: return
         selectedFolderId = id
         previewIndex = null
-        player.setMediaItems(folder.songs.map { MediaItem.fromUri(it.uri) }, 0, 0L)
+        if (autoPlay) {
+            loadIntoPlayer(folder, 0)
+            player.play()
+        }
+    }
+
+    /** Put a folder's songs in the player, at song [index], paused. */
+    private fun loadIntoPlayer(folder: MusicFolder, index: Int) {
+        playingFolderId = folder.id
+        player.setMediaItems(folder.songs.map { MediaItem.fromUri(it.uri) }, index, 0L)
         player.prepare()
-        if (autoPlay) player.play()
+        player.pause()
+    }
+
+    /** Random order for next / previous / end of song, within the playing folder. */
+    var shuffle by mutableStateOf(false)
+        private set
+
+    fun toggleShuffle() {
+        shuffle = !shuffle
+        player.shuffleModeEnabled = shuffle
     }
 
     fun playPause() {
+        // A picked song or another folder is waiting: start it (replaces what plays now).
+        if (startPending) return releaseSongWheel()
         if (player.isPlaying) player.pause() else player.play()
     }
 
-    fun next() = player.seekToNextMediaItem()
-    fun previous() = player.seekToPreviousMediaItem()
+    // While browsing another folder, the arrows only move through it (nothing plays).
+    fun next() = if (browsing) turnSongWheel(1) else player.seekToNextMediaItem()
+    fun previous() = if (browsing) turnSongWheel(-1) else player.seekToPreviousMediaItem()
 
     /** Timestamp bar dragged to a new time. */
     fun seekTo(ms: Long) {
@@ -137,9 +173,11 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Finger lifted from the song wheel: play the song it landed on. */
     fun releaseSongWheel() {
-        val target = previewIndex ?: return
+        val target = previewIndex ?: if (browsing) 0 else return
         previewIndex = null
-        if (target != player.currentMediaItemIndex) player.seekTo(target, 0L)
+        val folder = selectedFolder ?: return
+        if (browsing) loadIntoPlayer(folder, target)
+        else if (target != player.currentMediaItemIndex) player.seekTo(target, 0L)
         player.play()
     }
 
@@ -155,7 +193,6 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** App left (home / app switch) with the screen still on: pause. Screen off keeps playing. */
-    fun onAppLeft() = player.pause()
 
     override fun onCleared() {
         player.release()
