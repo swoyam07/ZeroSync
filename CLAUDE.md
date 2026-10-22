@@ -23,7 +23,7 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
   Exception: Camera's per-file Public switch copies a file to shared storage (user-approved).
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
-- No animations by default. Approved exception: 120 ms pop-in of the music hold menu. No background work, services, or polling unless approved.
+- No animations by default. Approved exceptions: 120 ms pop-in of the music hold menu; 1.2 s count-up of the music time ring on open (display only). No background work, services, or polling unless approved.
 - Prefer Android/Jetpack built-ins over third-party packages.
 - Adaptive layouts only; never hardcode screen pixel sizes.
 - Handle backgrounding, process death, config changes, low memory.

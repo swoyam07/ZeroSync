@@ -111,6 +111,13 @@ private fun Player(vm: MusicViewModel) {
     val shown = vm.shownIndex.coerceIn(0, songs.lastIndex)
     val song = songs[shown]
 
+    // Opening animation (user-approved): the time ring and numbers count up from 0:00 to the
+    // real spot in ~1.2 s, easing out. Display only: the music itself is never moved or delayed.
+    val intro = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        intro.animateTo(1f, androidx.compose.animation.core.tween(1200, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
+
     // Folder picker (hold, drag down). The list is turned so the current folder sits in the
     // middle (same number of folders above and below). picked = highlighted row, null = closed.
     var order by remember { mutableStateOf(emptyList<MusicFolder>()) }
@@ -133,13 +140,13 @@ private fun Player(vm: MusicViewModel) {
         // Tapping the cover of a picked (not yet playing) song starts it.
         Box(Modifier.fillMaxWidth(0.86f).aspectRatio(1f), contentAlignment = Alignment.Center) {
             // Ring first, cover on top, so taps on the cover reach the cover.
-            WaveformRing(vm, seed = song.id, Modifier.fillMaxSize())
+            WaveformRing(vm, seed = song.id, Modifier.fillMaxSize(), intro = intro.value)
             Cover(song, Modifier.fillMaxSize(0.74f).clickable(enabled = vm.startPending, onClick = vm::playPause))
         }
 
         // Numbers under the cover: elapsed | total.
         Text(
-            "${formatTime(vm.scrubMs ?: vm.positionMs)}  |  ${formatTime(vm.durationMs)}",
+            "${formatTime(((vm.scrubMs ?: vm.positionMs) * intro.value).toLong())}  |  ${formatTime(vm.durationMs)}",
             style = MaterialTheme.typography.labelMedium,
             color = ZsColors.OnSurface.copy(alpha = 0.7f),
             modifier = Modifier.padding(top = 10.dp),
@@ -325,7 +332,7 @@ private fun FolderPicker(names: List<String>, highlighted: Int) {
  * Tap or drag along the ring to jump; the song jumps when the finger lifts.
  */
 @Composable
-private fun WaveformRing(vm: MusicViewModel, seed: Long, modifier: Modifier) {
+private fun WaveformRing(vm: MusicViewModel, seed: Long, modifier: Modifier, intro: Float = 1f) {
     // Move the bar about twice a second, only while playing and the app is on screen.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(vm.isPlaying) {
@@ -339,7 +346,8 @@ private fun WaveformRing(vm: MusicViewModel, seed: Long, modifier: Modifier) {
     }
     var dragMs by remember { mutableStateOf<Float?>(null) }
     val duration = vm.durationMs.coerceAtLeast(1L).toFloat()
-    val shownMs = dragMs ?: (vm.scrubMs ?: vm.positionMs).toFloat().coerceAtMost(duration)
+    // While the opening animation runs, show a growing share of the real position.
+    val shownMs = dragMs ?: ((vm.scrubMs ?: vm.positionMs).toFloat() * intro).coerceAtMost(duration)
     val heights = remember(seed) { val rnd = java.util.Random(seed); List(90) { 0.25f + rnd.nextFloat() * 0.75f } }
     // Latest values for the touch handlers (they are set up once).
     val currentDuration by rememberUpdatedState(duration)
