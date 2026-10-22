@@ -15,8 +15,9 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
     Yes = take the next page; No / Submit = "Name this PDF" box (suggested "Scan <date time>",
     editable, saved as <name>.pdf; same name gets " (2)") → one PDF from all pages. While pending:
     Cancel (left of shutter) and Submit N (right).
-- Saved: category tabs Passport · ID · PDF (with counts); each lists only its own captures
-  (newest first) with a Public switch. Category = file name prefix.
+- Saved: icon column at the bottom-right (like Files; rounded squares, no counts):
+  Passport · ID · PDF. Each shows only its own captures (newest first), Public switch.
+  Category = file name prefix.
 - Delete is two-step, like the File section: hold a row → "Delete this file?" → red Delete.
 
 ## Privacy (user decision 2026-10-21)

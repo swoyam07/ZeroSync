@@ -404,18 +404,42 @@ private fun cropToFrame(image: ImageProxy, viewW: Float, viewH: Float, frame: Re
 /** Your captures. Private by default; the switch makes one visible to other apps (and back). */
 @Composable
 private fun SavedList(vm: CameraViewModel) {
-    // Category tabs under the main pill: each shows only what that mode took.
+    // Category picker: icon column at the bottom-right (like the File section), no counts.
     val categories = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf)
     var category by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CameraMode.Passport) }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp)) {
-        PillSwitch(
-            options = categories,
-            selected = category,
-            label = { mode -> "${mode.label} ${vm.saved.count { it.kind == mode.label.uppercase() }}" },
-            onSelect = { category = it },
-            modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp),
-        )
-        SavedItems(vm, vm.saved.filter { it.kind == category.label.uppercase() })
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp, end = 64.dp)) {
+            SavedItems(vm, vm.saved.filter { it.kind == category.label.uppercase() })
+        }
+        Column(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 10.dp, bottom = NavClearance + 40.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.Black.copy(alpha = 0.92f))
+                .border(1.dp, ZsColors.Secondary, RoundedCornerShape(16.dp))
+                .padding(5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            categories.forEach { mode ->
+                val active = mode == category
+                Box(
+                    Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp)) // rounded square, like the File section
+                        .background(if (active) Color.White else Color.Transparent)
+                        .clickable { category = mode },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val icon = when (mode) {
+                        CameraMode.Passport -> ZsIcons.Contact
+                        CameraMode.Id -> ZsIcons.Badge
+                        else -> ZsIcons.Pdf
+                    }
+                    Icon(icon, contentDescription = mode.label, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
     }
 }
 
