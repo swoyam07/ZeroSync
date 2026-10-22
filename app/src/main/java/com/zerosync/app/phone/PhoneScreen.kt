@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -426,6 +427,10 @@ private fun DialSuggestions(typed: String, onPick: (String) -> Unit) {
     }
 }
 
+/** Number key size + gap; the bottom tabs use the same columns so everything lines up. */
+private val KeyWidth = 96.dp
+private val KeyGap = 12.dp
+
 /** Height of every bottom tab slot (= Call button size). */
 private val TabSlotHeight = 64.dp
 
@@ -440,13 +445,19 @@ private fun PhoneTabs(
     onFavorite: (FavSlot) -> Unit = {},
 ) {
     // Nudged a bit lower (offset), closer to the nav strip.
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp).offset(y = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Same width and columns as the number keys, so Contacts sits under 1-4-7-*, Call under
+    // 2-5-8-0 and Recents under 3-6-9-#.
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp).offset(y = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(KeyGap, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         PhoneTab.entries.forEach { tab ->
             val active = tab == selected
             // On the Keypad tab the middle button becomes the green Call button (3 buttons, not 4).
             if (tab == PhoneTab.Keypad && active) {
                 // zIndex: the favorites menu is drawn on top of the neighbor tab icons.
-                Box(Modifier.weight(1f).height(TabSlotHeight).zIndex(1f), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(KeyWidth).height(TabSlotHeight).zIndex(1f), contentAlignment = Alignment.Center) {
                     // One green call button. Once the typed number's network is known (first 3
                     // digits), it turns that network's color (NTC blue / Ncell purple) and calls
                     // from YOUR SIM on the same network (NTC→NTC, Ncell→Ncell), else your default.
@@ -465,7 +476,7 @@ private fun PhoneTabs(
             val color = if (active) Color.White else ZsColors.Secondary
             // Same fixed height as the Call button, so icons never jump when switching tabs.
             Column(
-                Modifier.weight(1f).height(TabSlotHeight).clickable { onSelect(tab) },
+                Modifier.width(KeyWidth).height(TabSlotHeight).clip(RoundedCornerShape(16.dp)).clickable { onSelect(tab) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -490,11 +501,11 @@ fun Dialpad(onKey: (Char) -> Unit, onLongZero: (() -> Unit)? = null) {
     val rows = listOf("123", "456", "789", "*0#")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
                 row.forEach { c ->
                     Column(
                         Modifier
-                            .size(width = 96.dp, height = 64.dp)
+                            .size(width = KeyWidth, height = 64.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .combinedClickable(
                                 onClick = { onKey(c) },
