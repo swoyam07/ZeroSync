@@ -30,7 +30,10 @@ class CallService : InCallService() {
     // Hides ZeroSync's floating card once the call is answered / declined / gone.
     private val overlayWatcher = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
-            if (state != Call.STATE_RINGING) CallOverlay.hide(this@CallService)
+            if (state != Call.STATE_RINGING) {
+                CallOverlay.hide(this@CallService)
+                CallVibration.stop(this@CallService) // answered / declined
+            }
         }
     }
 
@@ -45,6 +48,7 @@ class CallService : InCallService() {
         call.registerCallback(overlayWatcher)
         // Any error while showing the ringing UI falls back to the full call screen, never a crash.
         if (call.details.state == Call.STATE_RINGING) {
+            CallVibration.start(this) // always vibrate while ringing
             runCatching { showIncoming() }.onFailure { CallOverlay.hide(this); openCallScreen() }
         } else {
             openCallScreen()
@@ -60,6 +64,7 @@ class CallService : InCallService() {
         }
         call.unregisterCallback(overlayWatcher)
         CallOverlay.hide(this)
+        CallVibration.stop(this)
         CallManager.removed(call)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }

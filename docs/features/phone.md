@@ -56,9 +56,12 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
 - Quick codes (`ServiceCodes.kt`): NTC (blue) / Ncell (purple) buttons at the top of the Keypad.
   NTC: Balance *400#, Pack *1415#, Data balance *1414*55#, Credit *1477#. Ncell: Balance *901#,
   Pack *123#, Credit *9988#. Tap = dialed from that network's SIM (system shows the reply).
+- Vibration (`CallVibration.kt`): every ringing call vibrates (800 ms on / 700 ms off) whether the
+  screen is on/off or locked/unlocked, even if the phone's "vibrate when ringing" is off. Stops on
+  answer / decline / end. Ringtone itself stays with the system (Settings → Sound → Ringtone, per SIM).
 
 ## Permissions
-CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock
+CALL_PHONE, VIBRATE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock
 screen" and "Display pop-up windows while running in the background" for ZeroSync.
 
 ## Next steps

@@ -30,6 +30,8 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Phone: vibrate while a call rings (always). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- ZeroSync's own small incoming-call card over other apps (phone unlocked). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
