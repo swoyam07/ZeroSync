@@ -9,10 +9,11 @@ import androidx.compose.ui.res.painterResource
 import com.zerosync.app.R
 
 /** Nepal mobile networks we recognise from the first 3 digits of a number. */
-enum class Carrier(val label: String, @param:DrawableRes val logo: Int, val prefixes: List<String>) {
+/** [color]: brand color from the logo, used as the incoming-call photo border. */
+enum class Carrier(val label: String, @param:DrawableRes val logo: Int, val color: Long, val prefixes: List<String>) {
     // 984/985/986 GSM, 974/975 CDMA (Sky), 976 4G.
-    Ntc("NTC", R.drawable.carrier_ntc, listOf("984", "985", "986", "974", "975", "976")),
-    Ncell("Ncell", R.drawable.carrier_ncell, listOf("980", "981", "982", "970")),
+    Ntc("NTC", R.drawable.carrier_ntc, 0xFF1D3C93, listOf("984", "985", "986", "974", "975", "976")),
+    Ncell("Ncell", R.drawable.carrier_ncell, 0xFF7B2C83, listOf("980", "981", "982", "970")),
 }
 
 /**

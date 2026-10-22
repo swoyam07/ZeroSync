@@ -104,7 +104,14 @@ fun CameraScreen(vm: CameraViewModel) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
             vm.mode == CameraMode.Saved -> SavedList(vm)
-            !granted -> PermissionPrompt { launcher.launch(Manifest.permission.CAMERA) }
+            !granted -> {
+                PermissionPrompt { launcher.launch(Manifest.permission.CAMERA) }
+                // Saved files stay reachable without camera permission (same spot as in camera view).
+                SavedButton(
+                    vm,
+                    Modifier.align(Alignment.BottomEnd).padding(bottom = NavClearance, end = 56.dp),
+                )
+            }
             else -> CameraView(vm)
         }
         // Top pill: only the 3 camera modes. Saved opens from the button right of the shutter.
@@ -213,20 +220,24 @@ private fun CameraView(vm: CameraViewModel) {
                         },
                     )
                 }
-                Box(
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 28.dp) // a bit in from the edge
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(1.5.dp, Color.White, RoundedCornerShape(14.dp))
-                        .clickable { vm.openSaved() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(ZsIcons.Folder, contentDescription = "Saved", tint = Color.White, modifier = Modifier.size(24.dp))
-                }
+                SavedButton(vm, Modifier.align(Alignment.CenterEnd).padding(end = 28.dp)) // a bit in from the edge
             }
         }
+    }
+}
+
+/** Folder button that opens Saved (your private photos / PDFs). */
+@Composable
+private fun SavedButton(vm: CameraViewModel, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.5.dp, Color.White, RoundedCornerShape(14.dp))
+            .clickable { vm.openSaved() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(ZsIcons.Folder, contentDescription = "Saved", tint = Color.White, modifier = Modifier.size(24.dp))
     }
 }
 

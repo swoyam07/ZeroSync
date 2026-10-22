@@ -94,8 +94,10 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         if (ok) placeCall(context, number)
     }
     var notificationsOn by remember { mutableStateOf(notificationsAllowed(context)) }
+    var overlayOn by remember { mutableStateOf(CallOverlay.canShow(context)) }
     LifecycleResumeEffect(Unit) {
         notificationsOn = notificationsAllowed(context)
+        overlayOn = CallOverlay.canShow(context)
         isDefault = isDefaultDialer(context)
         onPauseOrDispose { }
     }
@@ -132,6 +134,31 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                     modifier = Modifier.padding(top = 12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                 ) { Text("Set as default Phone app") }
+            }
+        }
+        // ZeroSync's own incoming-call card while the phone is unlocked needs this.
+        if (isDefault && !overlayOn) {
+            Column(
+                Modifier.padding(horizontal = 24.dp, vertical = 8.dp).clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "Allow \"Display over other apps\" to see ZeroSync's own call pop-up while using the phone.",
+                    color = ZsColors.OnSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}"),
+                            ),
+                        )
+                    },
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Allow") }
             }
         }
         // Without notifications: no missed-call alerts and no incoming-call pop-up.

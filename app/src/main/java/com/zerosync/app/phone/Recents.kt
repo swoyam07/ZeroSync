@@ -8,6 +8,9 @@ import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +68,8 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
     val context = LocalContext.current
     var granted by remember { mutableStateOf(hasCallLog(context)) }
     var reload by remember { mutableIntStateOf(0) }
+    // Number being saved from a held line (null = no chooser open).
+    var choosing by remember { mutableStateOf<String?>(null) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     // Fresh list each time the screen comes back (e.g. after a call).
     LifecycleResumeEffect(Unit) {
@@ -89,6 +94,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
         value = withContext(Dispatchers.IO) { runCatching { loadRecents(context) }.getOrDefault(emptyList()) }
     }
     val list = calls
+    choosing?.let { num -> SaveChooser(num, onPick = { c -> choosing = null; onSave(c) }, onDismiss = { choosing = null }) }
     when {
         list == null -> Box(modifier.fillMaxSize())
         list.isEmpty() -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -98,10 +104,11 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
             items(list) { call ->
                 RecentRow(
                     call,
-                    // Hold = save this number (or open its contact if already saved).
+                    // Hold: saved = open its contact; not saved = choose new or add to existing.
                     onLongClick = {
                         if (call.number.isNotBlank()) {
-                            onSave(call.contact ?: Contact(numbers = listOf(ContactNumber(localNumber(call.number)))))
+                            val saved = call.contact
+                            if (saved != null) onSave(saved) else choosing = localNumber(call.number)
                         }
                     },
                 ) { if (call.number.isNotBlank()) onCall(call.number) }
@@ -144,6 +151,52 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onClick: () -> 
         CarrierLogo(call.number, Modifier.padding(end = 14.dp).size(22.dp))
         Icon(ZsIcons.Phone, contentDescription = "Call back", tint = ZsColors.Secondary, modifier = Modifier.size(20.dp))
     }
+}
+
+/**
+ * Save an unsaved number: "New contact", or pick an existing contact to add it to
+ * (the number is added as Personal; the editor opens so you can change the label and Save).
+ */
+@Composable
+private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val contacts by produceState(emptyList<Contact>(), ContactsStore.version) {
+        value = withContext(Dispatchers.IO) { ContactsStore.all(context) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ZsColors.Surface,
+        title = { Text("Save $number", color = Color.White) },
+        text = {
+            Column {
+                Text(
+                    "+  New contact",
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { onPick(Contact(numbers = listOf(ContactNumber(number)))) }
+                        .padding(vertical = 12.dp),
+                )
+                if (contacts.isNotEmpty()) {
+                    Text("Add to existing", color = ZsColors.Secondary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(contacts, key = { it.id }) { c ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { onPick(c.copy(numbers = c.numbers + ContactNumber(number))) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Avatar(c, 36.dp)
+                                Text(c.name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = ZsColors.Secondary) } },
+    )
 }
 
 private fun hasCallLog(context: Context) =

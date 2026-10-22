@@ -178,10 +178,16 @@ private fun IncomingCall() {
                 .fillMaxWidth(0.82f)
                 .aspectRatio(1f)
                 .clip(WavyCircle)
-                .background(ZsColors.Surface),
+                .background(ZsColors.Surface)
+                // Network color around the photo: NTC blue, Ncell purple; none if unknown.
+                .then(
+                    carrierOf(number)?.let { Modifier.border(5.dp, Color(it.color), WavyCircle) } ?: Modifier,
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            // Contact photo if saved, otherwise empty.
+            // No photo: default person picture. Saved photo is drawn on top of it.
+            Icon(ZsIcons.Contact, contentDescription = null, tint = ZsColors.Secondary, modifier = Modifier.fillMaxSize(0.4f))
+            // Contact photo if saved.
             if (saved?.hasPhoto == true) {
                 val photo by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, saved.id) {
                     value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.photo(context, saved.id) }
@@ -195,6 +201,18 @@ private fun IncomingCall() {
             }
         }
 
+        // Saved contact's description, under the photo.
+        saved?.description?.takeIf { it.isNotBlank() }?.let { note ->
+            Text(
+                note,
+                color = ZsColors.OnSurface.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
         Spacer(Modifier.weight(1f))
         // Message: decline with a quick text (sent by the phone as a normal SMS).
         Row(

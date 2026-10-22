@@ -32,9 +32,14 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   (contacts.bin + <id>.photo). Never in the phone's shared contacts, no backup.
   Numbers match in any form (+977, spaces). Shown as name on: incoming screen (+ label, photo),
   in-call screen, Recents, missed-call notification. Recents: hold a line = save / open contact.
+- Unlocked incoming call (`CallOverlay.kt`, user chose 2026-10-22): ZeroSync's own floating card
+  at the top (photo with NTC/Ncell color ring, name/number + logo, red Decline, green Answer;
+  tap = full screen). Needs "Display over other apps"; the notification then goes on a quiet
+  channel (no HyperOS pop-up, no full-screen intent). Without the permission: system pop-up.
+  Locked / screen off: unchanged.
 
 ## Permissions
-CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock
+CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock
 screen" and "Display pop-up windows while running in the background" for ZeroSync.
 
 ## Next steps
