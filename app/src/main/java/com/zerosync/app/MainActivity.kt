@@ -85,6 +85,13 @@ private fun ZeroSyncApp() {
     LaunchedEffect(tab) { prefs.edit().putString("lastTab", tab.name).apply() }
     val gallery: GalleryViewModel = viewModel()
     val music: MusicViewModel = viewModel()
+    // Music paused by a Gallery video comes back when returning to the Music tab.
+    var previousTab by remember { mutableStateOf(tab) }
+    LaunchedEffect(tab) {
+        if (previousTab == AppTab.Music && tab != AppTab.Music) music.onLeaveMusicTab()
+        if (previousTab != AppTab.Music && tab == AppTab.Music) music.onReturnToMusicTab()
+        previousTab = tab
+    }
     val files: FilesViewModel = viewModel()
 
     // Lock-screen player: while music plays on the Music tab, ZeroSync may show over the

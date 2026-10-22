@@ -235,6 +235,19 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    // A Gallery video takes the speaker, which pauses the music. Remember if music was on
+    // when leaving the Music tab, and continue it on return (only while the app stays open).
+    private var resumeOnReturn = false
+
+    fun onLeaveMusicTab() {
+        resumeOnReturn = player.playWhenReady
+    }
+
+    fun onReturnToMusicTab() {
+        if (resumeOnReturn && !player.isPlaying) player.play()
+        resumeOnReturn = false
+    }
+
     fun playPause() {
         // A picked song or another folder is waiting: start it (replaces what plays now).
         if (startPending) return releaseSongWheel()

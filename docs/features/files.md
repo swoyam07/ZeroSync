@@ -11,7 +11,7 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/files/`). 
 - Pill tabs with counts: PDF · Word · PPT · Excel · Text (.pdf / .docx .doc / .pptx .ppt /
   .xlsx .xls / .txt .csv) · Images · Videos. Row: type tag, name, size · date. Old
   .doc/.ppt/.xls say "no preview".
-- Images / Videos: grid of small thumbnails, 5 per row, scrolls (lazy). Videos show a play mark.
+- Images / Videos: grid of thumbnails, 3 per row, scrolls (lazy). Videos show a play mark.
 - Delete (all tabs), two steps: hold an item → "Delete this file?" → red Delete. Removes the file
   from the phone (MediaStore delete, allowed by All files access).
 

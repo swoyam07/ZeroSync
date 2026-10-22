@@ -118,16 +118,16 @@ fun FilesScreen(vm: FilesViewModel) {
             return@Column
         }
         if (vm.kind == DocKind.Images || vm.kind == DocKind.Videos) {
-            // Small squares, 5 per row; tap = open.
+            // Squares, 3 per row; tap = open.
             LazyVerticalGrid(
-                columns = GridCells.Fixed(5),
+                columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = NavClearance),
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 gridItems(shown, key = { it.uri.toString() }) { doc ->
                     Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(4.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { toDelete = doc })) {
-                        Thumbnail(doc.uri, Modifier.fillMaxSize(), sizePx = 192)
+                        Thumbnail(doc.uri, Modifier.fillMaxSize(), sizePx = 360)
                         if (doc.kind == DocKind.Videos) {
                             Icon(
                                 ZsIcons.Play,
