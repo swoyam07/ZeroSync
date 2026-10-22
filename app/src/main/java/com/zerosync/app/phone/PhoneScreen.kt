@@ -61,9 +61,15 @@ private val NavClearance = 88.dp
  * Android requires this from any default Phone app. Exported only for that (allowed by the rules).
  */
 class DialerActivity : ComponentActivity() {
+    companion object {
+        /** Opened from a missed-call notification: clear that number's count. */
+        const val EXTRA_FROM_MISSED = "from_missed"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        intent?.getStringExtra(EXTRA_FROM_MISSED)?.let { MissedCallLog.clear(this, it) }
         val start = intent?.data?.schemeSpecificPart.orEmpty()
         setContent { ZeroSyncTheme { PhoneScreen(startNumber = start, bottomPadding = 24.dp) } }
     }
@@ -75,6 +81,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     val context = LocalContext.current
     var isDefault by remember { mutableStateOf(isDefaultDialer(context)) }
     var number by remember { mutableStateOf(startNumber) }
+    var phoneTab by remember { mutableStateOf(PhoneTab.Keypad) }
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefault = isDefaultDialer(context)
     }
@@ -83,7 +90,9 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) placeCall(context, number)
     }
+    var notificationsOn by remember { mutableStateOf(notificationsAllowed(context)) }
     LifecycleResumeEffect(Unit) {
+        notificationsOn = notificationsAllowed(context)
         isDefault = isDefaultDialer(context)
         onPauseOrDispose { }
     }
@@ -115,73 +124,157 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 ) { Text("Set as default Phone app") }
             }
         }
-        Spacer(Modifier.weight(1f))
-        // Number with a delete (backspace) icon on its right. Hold the icon = clear all.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.size(44.dp))
-            Text(
-                number.ifEmpty { " " },
-                color = Color.White,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Light,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .combinedClickable(
-                        enabled = number.isNotEmpty(),
-                        onClick = { number = number.dropLast(1) },
-                        onLongClick = { number = "" },
-                    ),
-                contentAlignment = Alignment.Center,
+        // Without notifications: no missed-call alerts and no incoming-call pop-up.
+        if (isDefault && !notificationsOn) {
+            Column(
+                Modifier.padding(24.dp).clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (number.isNotEmpty()) {
-                    Icon(ZsIcons.Backspace, contentDescription = "Delete", tint = ZsColors.Secondary, modifier = Modifier.size(26.dp))
-                }
+                Text(
+                    "Notifications are off, so missed calls and the incoming-call pop-up can't show.",
+                    color = ZsColors.OnSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName),
+                        )
+                    },
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Turn on notifications") }
             }
         }
-        Dialpad(onKey = { number += it })
-        Box(
-            Modifier
-                .padding(top = 20.dp)
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(Color.White)
-                .clickable(enabled = number.isNotBlank()) {
-                    if (hasCallPermission(context)) placeCall(context, number)
-                    else callPermission.launch(Manifest.permission.CALL_PHONE)
+        when (phoneTab) {
+            PhoneTab.Keypad -> {
+            Spacer(Modifier.weight(1f))
+            // Number with a delete (backspace) icon on its right. Hold the icon = clear all.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.size(44.dp))
+                Text(
+                    number.ifEmpty { " " },
+                    color = Color.White,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Light,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .combinedClickable(
+                            enabled = number.isNotEmpty(),
+                            onClick = { number = number.dropLast(1) },
+                            onLongClick = { number = "" },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (number.isNotEmpty()) {
+                        Icon(ZsIcons.Backspace, contentDescription = "Delete", tint = ZsColors.Secondary, modifier = Modifier.size(26.dp))
+                    }
+                }
+            }
+            Dialpad(onKey = { number += it }, onLongZero = { number += '+' })
+            }
+            PhoneTab.Recents -> RecentsList(
+                onCall = { n ->
+                    if (hasCallPermission(context)) placeCall(context, n)
+                    else { number = n; phoneTab = PhoneTab.Keypad }
                 },
-            contentAlignment = Alignment.Center,
-        ) { Text("Call", color = Color.Black, fontWeight = FontWeight.SemiBold) }
+                modifier = Modifier.weight(1f),
+            )
+            // Next step: private contacts.
+            else -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("${phoneTab.label} — coming next", color = ZsColors.Secondary)
+            }
+        }
+        PhoneTabs(
+            phoneTab,
+            onSelect = { phoneTab = it },
+            onCall = {
+                if (number.isBlank()) return@PhoneTabs
+                if (hasCallPermission(context)) placeCall(context, number)
+                else callPermission.launch(Manifest.permission.CALL_PHONE)
+            },
+        )
     }
 }
 
-/** 3 x 4 number keys, rounded squares. Used for dialing and for the in-call keypad. */
+/** Green for the call button only (user-approved color exception, like stock dialers). */
+private val CallGreen = Color(0xFF34A853)
+
+/** Order = left to right on screen: Contacts · Keypad (middle) · Recents. */
+enum class PhoneTab(val label: String) { Contacts("Contacts"), Keypad("Keypad"), Recents("Recents") }
+
+/** Bottom tabs: Contacts · Keypad/Call · Recents. Icons only, active = white, others gray. */
 @Composable
-fun Dialpad(onKey: (Char) -> Unit) {
-    val rows = listOf("123", "456", "789", "*0#")
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                row.forEach { c ->
-                    val shape = RoundedCornerShape(18.dp)
+private fun PhoneTabs(selected: PhoneTab, onSelect: (PhoneTab) -> Unit, onCall: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        PhoneTab.entries.forEach { tab ->
+            val active = tab == selected
+            // On the Keypad tab the middle button becomes the green Call button (3 buttons, not 4).
+            if (tab == PhoneTab.Keypad && active) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Box(
-                        Modifier
-                            .size(width = 84.dp, height = 60.dp)
-                            .clip(shape)
-                            .border(1.dp, ZsColors.Secondary.copy(alpha = 0.6f), shape)
-                            .clickable { onKey(c) },
+                        Modifier.size(64.dp).clip(CircleShape).background(CallGreen).clickable(onClick = onCall),
                         contentAlignment = Alignment.Center,
-                    ) { Text(c.toString(), color = Color.White, fontSize = 26.sp) }
+                    ) { Icon(ZsIcons.Phone, contentDescription = "Call", tint = Color.White, modifier = Modifier.size(30.dp)) }
+                }
+                return@forEach
+            }
+            val color = if (active) Color.White else ZsColors.Secondary
+            Column(
+                Modifier.weight(1f).clickable { onSelect(tab) }.padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val icon = when (tab) {
+                    PhoneTab.Keypad -> ZsIcons.Dialpad
+                    PhoneTab.Recents -> ZsIcons.Clock
+                    PhoneTab.Contacts -> ZsIcons.Contact
+                }
+                // Icon only; the label is read out by screen readers.
+                Icon(icon, contentDescription = tab.label, tint = color, modifier = Modifier.size(26.dp))
+            }
+        }
+    }
+}
+
+/**
+ * 3 x 4 number keys: big digit only, no borders.
+ * Used for dialing and for the in-call keypad. Hold 0 = "+" when [onLongZero] is given.
+ */
+@Composable
+fun Dialpad(onKey: (Char) -> Unit, onLongZero: (() -> Unit)? = null) {
+    val rows = listOf("123", "456", "789", "*0#")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { c ->
+                    Column(
+                        Modifier
+                            .size(width = 96.dp, height = 64.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .combinedClickable(
+                                onClick = { onKey(c) },
+                                onLongClick = if (c == '0' && onLongZero != null) onLongZero else null,
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(c.toString(), color = Color.White, fontSize = 28.sp)
+                    }
                 }
             }
         }
     }
 }
+
+private fun notificationsAllowed(context: Context) =
+    context.getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()
 
 private fun isDefaultDialer(context: Context): Boolean =
     context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)

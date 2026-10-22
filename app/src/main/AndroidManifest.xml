@@ -26,6 +26,8 @@
 
     <!-- Phone (default Phone app role): place calls, show the incoming-call screen. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Recents: read the phone's own call history (read-only). -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
@@ -103,6 +105,11 @@
         <!-- Call back / dismiss buttons of our own notification (not exported). -->
         <receiver
             android:name=".phone.MissedCallActionReceiver"
+            android:exported="false" />
+
+        <!-- Decline button on the small incoming-call pop-up (not exported). -->
+        <receiver
+            android:name=".phone.DeclineReceiver"
             android:exported="false" />
 
         <!-- Android's call bridge; only the system can bind it (BIND_INCALL_SERVICE). -->

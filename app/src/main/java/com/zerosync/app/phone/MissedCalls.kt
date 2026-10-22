@@ -9,75 +9,104 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.telecom.TelecomManager
+import androidx.core.content.edit
 import com.zerosync.app.R
 
 private const val CHANNEL = "missed_calls"
-private const val NOTIFICATION_ID = 1002
-private const val ACTION_CALL_BACK = "com.zerosync.app.CALL_BACK"
-private const val ACTION_DISMISS = "com.zerosync.app.DISMISS_MISSED"
+private const val GROUP = "missed_calls_group"
+private const val SUMMARY_ID = 1002
+private const val ACTION_OPENED = "com.zerosync.app.MISSED_OPENED"
 private const val EXTRA_NUMBER = "number"
 
 /**
- * Missed calls. Because ZeroSync declares this receiver, Android sends the missed-call event
- * here instead of showing its own notification. We show ZeroSync's notification:
- * "Missed call · number" with Call back. Exported only because the system sends it
- * (required for the default Phone app); it only ever shows or clears our notification.
+ * Missed AND declined calls, one notification per number with how many times they called,
+ * e.g. "98XXXXXXXX (3)". Several numbers stack under one group, so 3+ are visible at once.
+ * Tap one = (unlock if locked, Android asks) → ZeroSync's dial pad with that number filled in.
+ * Counts are kept in private storage until that notification is opened or swiped away.
+ */
+object MissedCallLog {
+    private fun prefs(context: Context) = context.getSharedPreferences("missed_calls", Context.MODE_PRIVATE)
+
+    /** Called by [CallService] when an incoming call ends without being answered. */
+    fun add(context: Context, number: String) {
+        val count = prefs(context).getInt(number, 0) + 1
+        prefs(context).edit { putInt(number, count) }
+        show(context, number, count)
+    }
+
+    /** The notification for [number] was opened or swiped away: forget its count. */
+    fun clear(context: Context, number: String) {
+        prefs(context).edit { remove(number) }
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.cancel(idFor(number))
+        if (prefs(context).all.isEmpty()) nm.cancel(SUMMARY_ID)
+    }
+
+    private fun idFor(number: String) = 2000 + (number.hashCode() and 0xFFFFF)
+
+    private fun show(context: Context, number: String, count: Int) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT))
+        val id = idFor(number)
+
+        // Tap: open the dial pad with this number (Android asks to unlock first if locked).
+        val open = PendingIntent.getActivity(
+            context, id,
+            Intent(context, DialerActivity::class.java)
+                .setData(Uri.fromParts("tel", number, null))
+                .putExtra(DialerActivity.EXTRA_FROM_MISSED, number)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val swiped = PendingIntent.getBroadcast(
+            context, id,
+            Intent(context, MissedCallActionReceiver::class.java).setAction(ACTION_OPENED).putExtra(EXTRA_NUMBER, number),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        nm.notify(
+            id,
+            Notification.Builder(context, CHANNEL)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(if (count > 1) "$number ($count)" else number)
+                .setContentText(if (count > 1) "Missed $count calls" else "Missed call")
+                .setCategory(Notification.CATEGORY_MISSED_CALL)
+                .setContentIntent(open)
+                .setDeleteIntent(swiped)
+                .setAutoCancel(true)
+                .setGroup(GROUP)
+                .build(),
+        )
+        // Summary that holds the per-number notifications together.
+        nm.notify(
+            SUMMARY_ID,
+            Notification.Builder(context, CHANNEL)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("Missed calls")
+                .setGroup(GROUP)
+                .setGroupSummary(true)
+                .setAutoCancel(true)
+                .build(),
+        )
+    }
+}
+
+/**
+ * Android's own missed-call event. Declaring this makes the system skip ITS notification;
+ * ours comes from [CallService] (which also counts declined calls). Exported only because the
+ * system sends it (default Phone app requirement); it does nothing else.
  */
 class MissedCallReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != TelecomManager.ACTION_SHOW_MISSED_CALLS_NOTIFICATION) return
-        val nm = context.getSystemService(NotificationManager::class.java)
-        val count = intent.getIntExtra(TelecomManager.EXTRA_NOTIFICATION_COUNT, 0)
-        if (count <= 0) {
-            nm.cancel(NOTIFICATION_ID) // missed calls were cleared
-            return
-        }
-        val number = intent.getStringExtra(TelecomManager.EXTRA_NOTIFICATION_PHONE_NUMBER)?.takeIf { it.isNotBlank() }
-
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Missed calls", NotificationManager.IMPORTANCE_DEFAULT))
-        // Tap = open the dial pad with the number filled in.
-        val open = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, DialerActivity::class.java)
-                .setData(number?.let { Uri.fromParts("tel", it, null) })
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val dismiss = PendingIntent.getBroadcast(
-            context, 1,
-            Intent(context, MissedCallActionReceiver::class.java).setAction(ACTION_DISMISS),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        val builder = Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(if (count == 1) "Missed call" else "$count missed calls")
-            .setContentText(number ?: "Unknown number")
-            .setCategory(Notification.CATEGORY_MISSED_CALL)
-            .setContentIntent(open)
-            .setDeleteIntent(dismiss) // swiped away = missed calls seen
-            .setAutoCancel(true)
-        if (number != null) {
-            val callBack = PendingIntent.getBroadcast(
-                context, 2,
-                Intent(context, MissedCallActionReceiver::class.java).setAction(ACTION_CALL_BACK).putExtra(EXTRA_NUMBER, number),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            builder.addAction(Notification.Action.Builder(null, "Call back", callBack).build())
-        }
-        nm.notify(NOTIFICATION_ID, builder.build())
+        // Mark Android's missed-call count as seen so it never shows its own badge.
+        runCatching { context.getSystemService(TelecomManager::class.java).cancelMissedCallsNotification() }
     }
 }
 
-/** Buttons on our missed-call notification. Not exported: only our own notification can use it. */
+/** Swipe-away of our notification. Not exported: only our own notification can use it. */
 class MissedCallActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val telecom = context.getSystemService(TelecomManager::class.java)
-        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-        // Tell Android the missed calls were seen (allowed for the default Phone app).
-        runCatching { telecom.cancelMissedCallsNotification() }
-        if (intent.action == ACTION_CALL_BACK) {
-            val number = intent.getStringExtra(EXTRA_NUMBER) ?: return
-            runCatching { telecom.placeCall(Uri.fromParts("tel", number, null), null) }
-        }
+        val number = intent.getStringExtra(EXTRA_NUMBER) ?: return
+        MissedCallLog.clear(context, number)
     }
 }

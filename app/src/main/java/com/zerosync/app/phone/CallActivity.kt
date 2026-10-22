@@ -62,9 +62,26 @@ private val EndRed = Color(0xFFD32F2F)
  * Closes itself when the call ends.
  */
 class CallActivity : ComponentActivity() {
+    companion object {
+        /** Set by the pop-up's Answer button: answer as soon as the screen opens. */
+        const val EXTRA_ANSWER = "answer"
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        answerIfAsked(intent)
+    }
+
+    private fun answerIfAsked(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_ANSWER, false) == true && CallManager.state == Call.STATE_RINGING) {
+            CallManager.answer()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        answerIfAsked(intent)
         setContent {
             ZeroSyncTheme {
                 val call = CallManager.call
@@ -260,13 +277,12 @@ private fun InCall() {
             Text(digits, color = Color.White, fontSize = 26.sp, modifier = Modifier.padding(bottom = 12.dp))
             Dialpad(onKey = { c -> digits += c; CallManager.pressKey(c) })
         } else {
+            // One row of round buttons.
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ToggleKey("Mute", CallManager.muted) { CallManager.toggleMute() }
-                ToggleKey("Speaker", CallManager.speaker) { CallManager.toggleSpeaker() }
-            }
-            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ToggleKey("Keypad", false) { keypad = true }
-                ToggleKey("Hold", state == Call.STATE_HOLDING) { CallManager.toggleHold() }
+                ToggleKey("Mute", CallManager.muted, ZsIcons.MicOff) { CallManager.toggleMute() }
+                ToggleKey("Speaker", CallManager.speaker, ZsIcons.Volume) { CallManager.toggleSpeaker() }
+                ToggleKey("Keypad", false, ZsIcons.Dialpad) { keypad = true }
+                ToggleKey("Hold", state == Call.STATE_HOLDING, ZsIcons.Pause) { CallManager.toggleHold() }
             }
         }
         Row(Modifier.padding(top = 28.dp, bottom = 40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -281,19 +297,26 @@ private fun InCall() {
     }
 }
 
-/** Rounded-square button: white when on, outlined when off. */
+/** Rounded-square button: white when on, outlined when off. With [icon]: icon only (label = description). */
 @Composable
-private fun ToggleKey(label: String, on: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
+private fun ToggleKey(label: String, on: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+    // Icon buttons are circles; text buttons (SIM picker) are rounded rectangles.
+    val shape = if (icon != null) CircleShape else RoundedCornerShape(18.dp)
     Box(
         Modifier
-            .size(width = if (label.length > 10) 260.dp else 120.dp, height = 64.dp)
+            .size(width = if (icon != null) 64.dp else if (label.length > 10) 260.dp else 120.dp, height = 64.dp)
             .clip(shape)
             .background(if (on) Color.White else Color.Black)
             .border(1.dp, ZsColors.Secondary, shape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(label, color = if (on) Color.Black else Color.White) }
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = label, tint = if (on) Color.Black else Color.White, modifier = Modifier.size(28.dp))
+        } else {
+            Text(label, color = if (on) Color.Black else Color.White)
+        }
+    }
 }
 
 private fun formatDuration(ms: Long): String {

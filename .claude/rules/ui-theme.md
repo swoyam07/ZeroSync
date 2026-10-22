@@ -16,6 +16,8 @@ paths:
   - tertiary `#D0D0D0`: FABs, badges, progress indicators only
   - surface `#141414`, text `#E6E6E6`
   - Only exception: red `#D32F2F` for destructive Delete buttons and call End (user-approved 2026-10-21).
+  - Green `#34A853` only for the dial pad Call button and Recents arrows; red `#D32F2F` also for
+    missed/declined Recents arrows (user-approved 2026-10-22).
 - Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery, Contact,
   Music, File, Camera). Swipe sideways = big tab name on screen, lift = switch. Tap a dot = jump.
   App opens on the last-used section; first install = Music.
