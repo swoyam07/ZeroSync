@@ -24,6 +24,11 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Phone (default Phone app role): place calls, show the incoming-call screen. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Offline by design: strip network permissions even if a library adds them.
          Without INTERNET, Android blocks every network socket for this app. -->
     <uses-permission
@@ -53,5 +58,64 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Phone: the next three are exported only because Android requires them for the
+             default Phone app role (allowed by the project rules). -->
+        <activity
+            android:name=".phone.DialerActivity"
+            android:exported="true"
+            android:taskAffinity=".dialer">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tel" />
+            </intent-filter>
+        </activity>
+
+        <!-- Call screen: over the lock screen, turns the screen on. Not exported. -->
+        <activity
+            android:name=".phone.CallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity=".call"
+            android:turnScreenOn="true" />
+
+        <!-- Missed calls: the system sends them here instead of showing its own notification. -->
+        <receiver
+            android:name=".phone.MissedCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.telecom.action.SHOW_MISSED_CALLS_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+        <!-- Call back / dismiss buttons of our own notification (not exported). -->
+        <receiver
+            android:name=".phone.MissedCallActionReceiver"
+            android:exported="false" />
+
+        <!-- Android's call bridge; only the system can bind it (BIND_INCALL_SERVICE). -->
+        <service
+            android:name=".phone.CallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

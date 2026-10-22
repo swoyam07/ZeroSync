@@ -1,0 +1,198 @@
+package com.zerosync.app.phone
+
+import android.Manifest
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Bundle
+import android.telecom.TelecomManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.Icon
+import com.zerosync.app.ui.ZsIcons
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.zerosync.app.ui.theme.ZeroSyncTheme
+import com.zerosync.app.ui.theme.ZsColors
+
+/** Room at the bottom so the dial pad clears the nav strip. */
+private val NavClearance = 88.dp
+
+/**
+ * Dial screen Android opens for "dial a number" (e.g. tapping a phone number in another app).
+ * Android requires this from any default Phone app. Exported only for that (allowed by the rules).
+ */
+class DialerActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val start = intent?.data?.schemeSpecificPart.orEmpty()
+        setContent { ZeroSyncTheme { PhoneScreen(startNumber = start, bottomPadding = 24.dp) } }
+    }
+}
+
+/** Phone tab: setup (become default Phone app) + dial pad. */
+@Composable
+fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.unit.Dp = NavClearance) {
+    val context = LocalContext.current
+    var isDefault by remember { mutableStateOf(isDefaultDialer(context)) }
+    var number by remember { mutableStateOf(startNumber) }
+    val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isDefault = isDefaultDialer(context)
+    }
+    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+    // Call button: ask for the call permission first if it's missing, then call.
+    val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) placeCall(context, number)
+    }
+    LifecycleResumeEffect(Unit) {
+        isDefault = isDefaultDialer(context)
+        onPauseOrDispose { }
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (!isDefault) {
+            Column(
+                Modifier.padding(24.dp).clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "To show ZeroSync's call screen, set it as the default Phone app. " +
+                        "You can switch back any time in Settings → Apps → Default apps → Phone app.",
+                    color = ZsColors.OnSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = {
+                        // Ask once for notifications (needed for the incoming-call screen).
+                        permissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.CALL_PHONE))
+                        val rm = context.getSystemService(RoleManager::class.java)
+                        roleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+                    },
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Set as default Phone app") }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        // Number with a delete (backspace) icon on its right. Hold the icon = clear all.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.size(44.dp))
+            Text(
+                number.ifEmpty { " " },
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Light,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .combinedClickable(
+                        enabled = number.isNotEmpty(),
+                        onClick = { number = number.dropLast(1) },
+                        onLongClick = { number = "" },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (number.isNotEmpty()) {
+                    Icon(ZsIcons.Backspace, contentDescription = "Delete", tint = ZsColors.Secondary, modifier = Modifier.size(26.dp))
+                }
+            }
+        }
+        Dialpad(onKey = { number += it })
+        Box(
+            Modifier
+                .padding(top = 20.dp)
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .clickable(enabled = number.isNotBlank()) {
+                    if (hasCallPermission(context)) placeCall(context, number)
+                    else callPermission.launch(Manifest.permission.CALL_PHONE)
+                },
+            contentAlignment = Alignment.Center,
+        ) { Text("Call", color = Color.Black, fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+/** 3 x 4 number keys, rounded squares. Used for dialing and for the in-call keypad. */
+@Composable
+fun Dialpad(onKey: (Char) -> Unit) {
+    val rows = listOf("123", "456", "789", "*0#")
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                row.forEach { c ->
+                    val shape = RoundedCornerShape(18.dp)
+                    Box(
+                        Modifier
+                            .size(width = 84.dp, height = 60.dp)
+                            .clip(shape)
+                            .border(1.dp, ZsColors.Secondary.copy(alpha = 0.6f), shape)
+                            .clickable { onKey(c) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(c.toString(), color = Color.White, fontSize = 26.sp) }
+                }
+            }
+        }
+    }
+}
+
+private fun isDefaultDialer(context: Context): Boolean =
+    context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)
+
+/** Start a normal SIM call through Android (the call screen then opens by itself). */
+private fun hasCallPermission(context: Context) =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+
+private fun placeCall(context: Context, number: String) {
+    if (!hasCallPermission(context)) return
+    runCatching {
+        context.getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), null)
+    }
+}

@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zerosync.app.gallery.GalleryScreen
 import com.zerosync.app.gallery.GalleryViewModel
 import com.zerosync.app.ui.AppTab
+import com.zerosync.app.phone.PhoneScreen
 import com.zerosync.app.files.FilesScreen
 import com.zerosync.app.files.FilesViewModel
 import com.zerosync.app.camera.CameraScreen
@@ -147,6 +148,7 @@ private fun ZeroSyncApp() {
             AppTab.Music -> MusicScreen(music)
             AppTab.Camera -> CameraScreen(viewModel<CameraViewModel>())
             AppTab.File -> FilesScreen(files)
+            AppTab.Contact -> PhoneScreen() // phone setup + dial pad for now
             else -> Text(
                 "${tab.label}: coming soon",
                 color = ZsColors.OnSurface.copy(alpha = 0.6f),
