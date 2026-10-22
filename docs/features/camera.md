@@ -2,7 +2,9 @@
 
 Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
 
-## Modes (top pill): Passport · ID · PDF
+## Modes: Passport · ID · PDF
+- Picked in a frosted dark panel under the frame (round icon + small caps label, selected =
+  white circle). Tap, or swipe left/right inside the panel. No top pill; Saved has a back arrow.
 - Shutter centred at the bottom; Saved = folder button at the right edge (back = camera).
   PDF in progress: Cancel / Submit N in a row above the shutter.
 - Live back camera with a white frame in the real document shape; outside is darkened.
@@ -10,7 +12,8 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
   - Passport: 35 × 45 mm (portrait) → JPEG.
   - ID: 85.6 × 54 mm (bank-card size, landscape) → JPEG.
   - PDF: A4 portrait (210 × 297 mm). After each photo: "Add another page?"
-    Yes = take the next page; No = build one PDF from all pages. While pages are pending:
+    Yes = take the next page; No / Submit = "Name this PDF" box (suggested "Scan <date time>",
+    editable, saved as <name>.pdf; same name gets " (2)") → one PDF from all pages. While pending:
     Cancel (left of shutter) and Submit N (right).
 - Saved: category tabs Passport · ID · PDF (with counts); each lists only its own captures
   (newest first) with a Public switch. Category = file name prefix.

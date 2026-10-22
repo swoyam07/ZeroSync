@@ -19,6 +19,9 @@ import java.util.Locale
 data class SavedDoc(val file: File, val isPdf: Boolean, val isPublic: Boolean) {
     /** Which mode took it, from the file name prefix: PASSPORT_, ID_ or PDF_. */
     val kind: String get() = file.name.substringBefore('_')
+
+    /** Name shown to the user (and used for the public copy): without the PASSPORT_/ID_/PDF_ prefix. */
+    val displayName: String get() = file.name.substringAfter('_')
 }
 
 /**
@@ -38,6 +41,17 @@ class CameraRepository(private val context: Context) {
             .filter { it.extension == "jpg" || it.extension == "pdf" }
             .sortedByDescending { it.lastModified() }
             .map { SavedDoc(it, it.extension == "pdf", publicCopies.contains(it.name)) }
+
+    /** Keep only characters that are safe in file names. */
+    private fun safeName(name: String) = name.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80)
+
+    /** base.ext, or base (2).ext, base (3).ext ... if that name is taken. */
+    private fun uniqueFile(base: String, ext: String): File {
+        var f = File(dir, "$base.$ext")
+        var n = 2
+        while (f.exists()) f = File(dir, "$base (${n++}).$ext")
+        return f
+    }
 
     private fun newName(prefix: String, ext: String): String =
         "${prefix}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.$ext"
@@ -61,7 +75,8 @@ class CameraRepository(private val context: Context) {
     }
 
     /** Build one A4 PDF from the page files (one photo per page, filling it), then drop the temps. */
-    fun buildPdf(pages: List<File>): File {
+    /** [title]: the name the user chose (without .pdf); empty = date-time name. */
+    fun buildPdf(pages: List<File>, title: String = ""): File {
         val pdf = PdfDocument()
         // A4 in PDF points (1/72 inch).
         val w = 595
@@ -74,7 +89,7 @@ class CameraRepository(private val context: Context) {
             }
             pdf.finishPage(page)
         }
-        val file = File(dir, newName("PDF", "pdf"))
+        val file = if (title.isBlank()) File(dir, newName("PDF", "pdf")) else uniqueFile("PDF_" + safeName(title), "pdf")
         file.outputStream().use { pdf.writeTo(it) }
         pdf.close()
         clearPages()
@@ -85,7 +100,7 @@ class CameraRepository(private val context: Context) {
     fun makePublic(doc: SavedDoc) {
         if (doc.isPublic) return
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, doc.file.name)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, doc.displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, if (doc.isPdf) "application/pdf" else "image/jpeg")
             put(
                 MediaStore.MediaColumns.RELATIVE_PATH,

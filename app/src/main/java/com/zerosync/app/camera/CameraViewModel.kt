@@ -84,13 +84,24 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** "No" / "Submit": turn all pages into one PDF. */
+    /** Name box before saving a PDF (null = closed). Holds the suggested name. */
+    var pdfNameDraft by mutableStateOf<String?>(null)
+
+    /** "No" / "Submit": ask for a name first. */
     fun finishPdf() {
         askAnotherPage = false
+        if (pdfPages.isEmpty()) return
+        pdfNameDraft = "Scan " + java.text.SimpleDateFormat("yyyy-MM-dd HH-mm", java.util.Locale.US).format(java.util.Date())
+    }
+
+    /** Name chosen: build "<name>.pdf" from all pages. */
+    fun savePdf(name: String) {
+        pdfNameDraft = null
         val pages = pdfPages
         if (pages.isEmpty()) return
         busy = true
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { repo.buildPdf(pages) }
+            withContext(Dispatchers.IO) { repo.buildPdf(pages, name.removeSuffix(".pdf")) }
             pdfPages = emptyList()
             busy = false
             message = "PDF saved (${pages.size} page${if (pages.size > 1) "s" else ""}, private)"

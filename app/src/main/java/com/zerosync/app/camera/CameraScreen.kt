@@ -74,6 +74,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -115,15 +116,15 @@ fun CameraScreen(vm: CameraViewModel) {
             }
             else -> CameraView(vm)
         }
-        // Top pill: only the 3 camera modes. Saved opens from the button right of the shutter.
-        if (vm.mode == CameraMode.Saved) androidx.activity.compose.BackHandler { vm.mode = vm.lastCameraMode }
-        PillSwitch(
-            options = CameraMode.entries - CameraMode.Saved,
-            selected = vm.mode,
-            label = { it.label },
-            onSelect = { vm.mode = it },
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp),
-        )
+        // Modes are picked in the panel under the frame (CameraView). Saved: back arrow top-left.
+        if (vm.mode == CameraMode.Saved) {
+            androidx.activity.compose.BackHandler { vm.mode = vm.lastCameraMode }
+            Icon(
+                ZsIcons.Back, contentDescription = "Back to camera", tint = Color.White,
+                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp).size(40.dp)
+                    .clip(CircleShape).clickable { vm.mode = vm.lastCameraMode }.padding(8.dp),
+            )
+        }
     }
 
     // PDF: after each page, ask whether to add another.
@@ -135,6 +136,36 @@ fun CameraScreen(vm: CameraViewModel) {
             text = { Text("${vm.pdfPages.size} page(s) so far.", color = ZsColors.OnSurface) },
             confirmButton = { TextButton(onClick = vm::addAnotherPage) { Text("Yes", color = Color.White) } },
             dismissButton = { TextButton(onClick = vm::finishPdf) { Text("No, save PDF", color = ZsColors.Secondary) } },
+        )
+    }
+
+    // PDF name: shown after "No" / "Submit". Saved as "<name>.pdf". Cancel = back to the camera.
+    vm.pdfNameDraft?.let { draft ->
+        var name by remember(draft) { mutableStateOf(draft) }
+        AlertDialog(
+            onDismissRequest = { vm.pdfNameDraft = null },
+            containerColor = ZsColors.Surface,
+            title = { Text("Name this PDF", color = Color.White) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    suffix = { Text(".pdf", color = ZsColors.Secondary) },
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White, unfocusedBorderColor = ZsColors.Secondary, cursorColor = Color.White,
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { vm.savePdf(name) },
+                    enabled = name.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { vm.pdfNameDraft = null }) { Text("Cancel", color = ZsColors.Secondary) } },
         )
     }
 
@@ -189,6 +220,8 @@ private fun CameraView(vm: CameraViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             vm.message?.let { Text(it, color = Color.White, modifier = Modifier.padding(bottom = 12.dp)) }
+            // Mode panel (Passport · ID · PDF) under the frame: tap, or swipe left/right inside it.
+            ModePanel(vm.mode, onSelect = { vm.mode = it }, Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp))
             // PDF in progress: Cancel and Submit in a row above the shutter.
             if (vm.mode == CameraMode.Pdf && vm.pdfPages.isNotEmpty()) {
                 Row(
@@ -227,6 +260,71 @@ private fun CameraView(vm: CameraViewModel) {
     }
 }
 
+private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf)
+
+/**
+ * Frosted dark panel with the 3 document modes (round icon + small caps label).
+ * Selected = white circle with black icon and white label. Tap one, or swipe sideways
+ * inside the panel: left = next mode, right = previous.
+ */
+@Composable
+private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modifier: Modifier = Modifier) {
+    val index = CameraModes.indexOf(selected).coerceAtLeast(0)
+    val currentIndex by androidx.compose.runtime.rememberUpdatedState(index)
+    val currentOnSelect by androidx.compose.runtime.rememberUpdatedState(onSelect)
+    val shape = RoundedCornerShape(28.dp)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Color(0xCC1C1C1C))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
+            .pointerInput(Unit) {
+                var dx = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onDragEnd = {
+                        val limit = 40.dp.toPx()
+                        val next = when {
+                            dx < -limit -> currentIndex + 1
+                            dx > limit -> currentIndex - 1
+                            else -> currentIndex
+                        }.coerceIn(0, CameraModes.lastIndex)
+                        if (next != currentIndex) currentOnSelect(CameraModes[next])
+                    },
+                ) { change, amount -> change.consume(); dx += amount }
+            }
+            .padding(vertical = 14.dp),
+    ) {
+        CameraModes.forEach { mode ->
+            val active = mode == selected
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onSelect(mode) }.padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier.size(52.dp).clip(CircleShape).background(if (active) Color.White else Color.White.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val icon = when (mode) {
+                        CameraMode.Passport -> ZsIcons.Contact
+                        CameraMode.Id -> ZsIcons.Badge
+                        else -> ZsIcons.Pdf
+                    }
+                    Icon(icon, contentDescription = null, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(24.dp))
+                }
+                Text(
+                    mode.label.uppercase(),
+                    color = if (active) Color.White else ZsColors.Secondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+    }
+}
+
 /** Folder button that opens Saved (your private photos / PDFs). */
 @Composable
 private fun SavedButton(vm: CameraViewModel, modifier: Modifier = Modifier) {
@@ -246,13 +344,13 @@ private fun SavedButton(vm: CameraViewModel, modifier: Modifier = Modifier) {
 private fun frameRect(viewW: Float, viewH: Float, aspect: Float): Rect {
     var w = viewW * 0.84f
     var h = w / aspect
-    val maxH = viewH * 0.62f
+    val maxH = viewH * 0.5f // leaves room for the mode panel + shutter below
     if (h > maxH) {
         h = maxH
         w = h * aspect
     }
     val left = (viewW - w) / 2f
-    val top = (viewH - h) / 2f - viewH * 0.04f // a bit above centre, clear of the shutter
+    val top = viewH * 0.38f - h / 2f // centered in the upper part, above the controls
     return Rect(left, top, left + w, top + h)
 }
 
@@ -361,7 +459,7 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
                 ) {
                     DocThumb(doc)
                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text(doc.file.nameWithoutExtension, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(doc.displayName.substringBeforeLast('.'), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             (if (doc.isPublic) "Public · " else "Private · ") +
                                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(doc.file.lastModified())),
