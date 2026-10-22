@@ -15,6 +15,11 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
   - Right (lower): song wheel. Each 30° tick = next/previous song shown + vibration;
     the song plays when the finger lifts. Wraps around the list.
 
+## Round buttons (no hold)
+- Both music buttons open their menu as soon as you start swiping (no long-press wait).
+  A plain tap does nothing. Song button: up+circle = play, right+circle = pick, down = folder,
+  left = time scrub. Volume button: right = volume, left = sleep timer.
+
 ## Playback
 - No notification, no background service (user removed it 2026-10-18).
 - Keeps playing with the screen off (power button) and while switching tabs.

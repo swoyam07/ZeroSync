@@ -100,6 +100,14 @@ object SmsStore {
         changed()
     }
 
+    /** Delete the whole chat with this person (every message, sent and received, any number form). */
+    fun deleteConversation(context: Context, address: String) {
+        messages(context, address).forEach { m ->
+            runCatching { context.contentResolver.delete(uri, "${Telephony.Sms._ID} = ?", arrayOf(m.id.toString())) }
+        }
+        changed()
+    }
+
     fun delete(context: Context, smsId: Long) {
         runCatching { context.contentResolver.delete(uri, "${Telephony.Sms._ID} = ?", arrayOf(smsId.toString())) }
         changed()

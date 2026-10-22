@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,6 +108,27 @@ private fun nameOf(context: android.content.Context, address: String) =
 private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     BackHandler(onBack = onBack)
+    val scope = rememberCoroutineScope()
+    var deleting by remember { mutableStateOf<Pair<Conversation, String>?>(null) }
+    deleting?.let { (conv, name) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleting = null },
+            containerColor = ZsColors.Surface,
+            title = { Text("Delete chat with $name?", color = Color.White) },
+            text = { Text("All messages with $name are removed. The saved contact and number stay.", color = ZsColors.OnSurface) },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) { SmsStore.deleteConversation(context, conv.address) }
+                        SmsNotifications.clear(context, conv.address)
+                        deleting = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
+                ) { Text("Delete") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+        )
+    }
     val list by produceState<List<Pair<Conversation, String>>?>(null, SmsStore.version) {
         value = withContext(Dispatchers.IO) { SmsStore.conversations(context).map { it to nameOf(context, it.address) } }
     }
@@ -123,7 +145,8 @@ private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(items, key = { it.first.threadId }) { (conv, name) ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { onOpen(conv.address) }.padding(horizontal = 20.dp, vertical = 12.dp),
+                        // Tap = open; hold = delete this whole chat (contact stays saved).
+                        Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(conv.address) }, onLongClick = { deleting = conv to name }).padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -158,6 +181,44 @@ private fun ConversationScreen(start: String, onBack: () -> Unit) {
     var numberInput by remember { mutableStateOf("") }
     var text by remember { mutableStateOf("") }
     BackHandler(onBack = onBack)
+    // Message whose Copy / Delete box is open (null = none).
+    var menuFor by remember { mutableStateOf<Sms?>(null) }
+    var confirmDelete by remember { mutableStateOf<Sms?>(null) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    menuFor?.let { m ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { menuFor = null },
+            containerColor = ZsColors.Surface,
+            title = { Text("Message", color = Color.White) },
+            text = {
+                Column {
+                    Text("Copy text", color = Color.White, modifier = Modifier.fillMaxWidth()
+                        .clickable { clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.body)); menuFor = null }
+                        .padding(vertical = 12.dp))
+                    Text("Delete message", color = Color(0xFFD32F2F), modifier = Modifier.fillMaxWidth()
+                        .clickable { confirmDelete = m; menuFor = null }
+                        .padding(vertical = 12.dp))
+                }
+            },
+            confirmButton = {},
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { menuFor = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+        )
+    }
+    confirmDelete?.let { m ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            containerColor = ZsColors.Surface,
+            title = { Text("Delete this message?", color = Color.White) },
+            text = { Text("Only this message is removed. The conversation stays.", color = ZsColors.OnSurface) },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { scope.launch(Dispatchers.IO) { SmsStore.delete(context, m.id) }; confirmDelete = null },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
+                ) { Text("Delete") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmDelete = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+        )
+    }
 
     // Everything with this person, sent and received, whatever form the number was saved in.
     val messages by produceState(emptyList<Sms>(), address, SmsStore.version) {
@@ -201,13 +262,13 @@ private fun ConversationScreen(start: String, onBack: () -> Unit) {
                             .widthIn(max = 280.dp)
                             .clip(RoundedCornerShape(18.dp))
                             .background(if (m.incoming) ZsColors.Surface else Color.White)
+                            // Hold a message = Copy / Delete (only that message, not the chat).
+                            .combinedClickable(onClick = {}, onLongClick = { menuFor = m })
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                     ) {
                         // SAFETY: plain text only. Links are NOT clickable (no auto-linking), nothing in a
-                        // message is ever opened or run. Hold to select + copy, then paste it yourself.
-                        androidx.compose.foundation.text.selection.SelectionContainer {
-                            Text(m.body, color = if (m.incoming) Color.White else Color.Black)
-                        }
+                        // message is ever opened or run. Hold → Copy, then paste it yourself.
+                        Text(m.body, color = if (m.incoming) Color.White else Color.Black)
                         Text(
                             java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(m.date)) +
                                 if (m.failed) " · Not sent" else "",

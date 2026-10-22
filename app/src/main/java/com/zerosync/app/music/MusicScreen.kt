@@ -298,27 +298,38 @@ private fun sleepLabel(minutes: Int?) = when {
 
 @Composable
 private fun FolderPicker(names: List<String>, highlighted: Int) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.8f))
-            .padding(horizontal = 48.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // One tall capsule (like the iOS brightness slider when held), split into equal sections
+    // with thin lines; the highlighted section is filled white with black text.
+    // Same logic as before: moving the finger up/down changes the highlighted section.
+    val shape = RoundedCornerShape(36.dp)
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)),
+        contentAlignment = Alignment.Center,
     ) {
-        names.forEachIndexed { i, name ->
-            val active = i == highlighted
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (active) ZsColors.PrimaryContainer else Color.Black)
-                    .border(1.dp, if (active) ZsColors.Primary else ZsColors.Secondary, RoundedCornerShape(12.dp))
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(
+            Modifier
+                .fillMaxWidth(0.62f)
+                .clip(shape)
+                .background(ZsColors.Surface)
+                .border(1.dp, Color.White.copy(alpha = 0.15f), shape),
+        ) {
+            names.forEachIndexed { i, name ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.Black)) // partition line
+                val active = i == highlighted
+                Box(
+                    Modifier.fillMaxWidth().height(56.dp).background(if (active) Color.White else Color.Transparent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        name,
+                        color = if (active) Color.Black else Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
     }

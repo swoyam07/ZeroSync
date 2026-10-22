@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.zerosync.app.ui.ZsIcons
 import com.zerosync.app.ui.theme.ZsColors
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 /** Finger travel (up/down) from silent to max volume. One step = this / maxVolume. */
@@ -39,11 +38,11 @@ private const val ARC_HALF = 60f
 private enum class VolMode { Idle, Menu, Volume, Timer }
 
 /** Finger travel (up/down) that moves the timer choice by one. */
-private val TIMER_STEP = 48.dp
+private val TIMER_STEP = 22.dp // same quick step as the folder picker (was 48)
 
 /**
  * Small round button with no icon (left side). A tap does nothing.
- * 1. Hold it: a menu opens with 2 halves, left and right.
+ * 1. Start swiping (no hold): a menu opens with 2 halves, left and right.
  * 2. Still holding, drag into a half:
  *    - Right: a curved bar appears on the right (shows the volume). Move the finger up for
  *      louder, down for quieter: about [VOLUME_TRAVEL] covers the full range; each step = [onVolumeStep] (+1 / -1) + vibration.
@@ -84,16 +83,14 @@ fun VolumeButton(
 
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    // Returns null when the time runs out with the finger still down = a hold.
-                    val notHeld = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                        while (true) {
-                            val change = awaitPointerEvent().changes.first()
-                            if (!change.pressed) break
-                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
-                        }
-                        true
+                    // No hold: the menu opens as soon as the finger starts moving (swipe).
+                    // Lifting without moving (a tap) does nothing.
+                    var moved = false
+                    while (!moved) {
+                        val change = awaitPointerEvent().changes.first()
+                        if (!change.pressed) return@awaitEachGesture
+                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     }
-                    if (notHeld != null) return@awaitEachGesture
 
                     mode = VolMode.Menu
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)

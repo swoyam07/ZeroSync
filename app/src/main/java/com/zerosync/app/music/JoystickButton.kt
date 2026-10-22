@@ -46,11 +46,11 @@ private enum class Mode { Idle, Menu, Dial, Picker, Seek }
 private val SEEK_TRAVEL = 200.dp
 
 /** Finger travel (up/down) that moves the folder cursor by one. */
-private val PICKER_STEP = 48.dp
+private val PICKER_STEP = 22.dp // small finger moves change the folder (was 48)
 
 /**
  * One small round button with no icon. A tap does nothing.
- * 1. Hold it: a round menu opens (centre circle + 4 parts: up, down, left, right).
+ * 1. Start swiping (no hold): a round menu opens (centre circle + 4 parts: up, down, left, right).
  * 2. Still holding, drag into a part:
  *    - Up: song mode turns on and a dial appears. Circle your finger: every [STEP_DEGREES]
  *      = [onUpTick] (+1 clockwise, -1 counter-clockwise) with a vibration. Lift = [onUpRelease].
@@ -112,17 +112,14 @@ fun JoystickButton(
 
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    // Wait for a hold. Lifting or moving away first = just a tap/drag, ignore it.
-                    // Returns null when the time runs out with the finger still down = a hold.
-                    val notHeld = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                        while (true) {
-                            val change = awaitPointerEvent().changes.first()
-                            if (!change.pressed) break
-                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
-                        }
-                        true
+                    // No hold: the menu opens as soon as the finger starts moving (swipe).
+                    // Lifting without moving (a tap) does nothing.
+                    var moved = false
+                    while (!moved) {
+                        val change = awaitPointerEvent().changes.first()
+                        if (!change.pressed) return@awaitEachGesture
+                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     }
-                    if (notHeld != null) return@awaitEachGesture
 
                     mode = Mode.Menu
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
