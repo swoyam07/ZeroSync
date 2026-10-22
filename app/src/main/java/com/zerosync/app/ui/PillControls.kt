@@ -33,8 +33,8 @@ import com.zerosync.app.ui.theme.ZsColors
 
 enum class AppTab(val label: String, val icon: ImageVector) {
     Gallery("Gallery", ZsIcons.Gallery),
-    Contact("Contact", ZsIcons.Contact),
     Music("Music", ZsIcons.Music),
+    Contact("Contact", ZsIcons.Contact), // Phone: middle of the nav
     File("File", ZsIcons.File),
     Camera("Camera", ZsIcons.Camera),
 }

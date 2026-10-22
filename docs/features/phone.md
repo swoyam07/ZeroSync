@@ -23,6 +23,15 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   hold 0 = "+". Recents = Android's own call history (CallLog, read-only, nothing copied;
   user chose option 1 on 2026-10-22): type icon, name (phone contacts' cached name) or number,
   "(N)" for back-to-back repeats, relative time; tap = call back. Last 500 calls.
+- Network logo (`Carrier.kt`, images in `res/drawable/carrier_*.png`): first 3
+  digits (after removing +977 / 00977): NTC 984/985/986/974/975/976, Ncell 980/981/982/970; anything else
+  (e.g. 01 landlines) shows no logo. Shown on the incoming-call screen and in Recents.
+- Contacts (private, `ContactsStore.kt` + `ContactsUi.kt`): name (required), 1+ numbers each
+  Personal (default) / Home / Work, description, optional photo (system photo picker, ≤512 px).
+  Stored only in app-private files, AES-256-GCM with a hardware-backed Android Keystore key
+  (contacts.bin + <id>.photo). Never in the phone's shared contacts, no backup.
+  Numbers match in any form (+977, spaces). Shown as name on: incoming screen (+ label, photo),
+  in-call screen, Recents, missed-call notification. Recents: hold a line = save / open contact.
 
 ## Permissions
 CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock

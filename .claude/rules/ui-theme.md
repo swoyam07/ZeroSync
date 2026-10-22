@@ -18,8 +18,8 @@ paths:
   - Only exception: red `#D32F2F` for destructive Delete buttons and call End (user-approved 2026-10-21).
   - Green `#34A853` only for the dial pad Call button and Recents arrows; red `#D32F2F` also for
     missed/declined Recents arrows (user-approved 2026-10-22).
-- Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery, Contact,
-  Music, File, Camera). Swipe sideways = big tab name on screen, lift = switch. Tap a dot = jump.
+- Main nav: swipe-dial strip (`ui/DialNavBar.kt`): thin line + 5 dots (Gallery, Music,
+  Contact/Phone (middle), File, Camera). Swipe sideways = big tab name on screen, lift = switch. Tap a dot = jump.
   App opens on the last-used section; first install = Music.
 - Section mode switches: pill tab at top + sideways swipe on the section screen (no nav-bar gestures).
 - Use lazy lists/grids for large data. No animations unless approved.

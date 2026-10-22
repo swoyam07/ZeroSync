@@ -28,14 +28,17 @@ object MissedCallLog {
     private fun prefs(context: Context) = context.getSharedPreferences("missed_calls", Context.MODE_PRIVATE)
 
     /** Called by [CallService] when an incoming call ends without being answered. */
-    fun add(context: Context, number: String) {
+    fun add(context: Context, rawNumber: String) {
+        // +9779841000000 and 9841000000 are the same person: one notification, one count.
+        val number = localNumber(rawNumber).ifEmpty { rawNumber }
         val count = prefs(context).getInt(number, 0) + 1
         prefs(context).edit { putInt(number, count) }
         show(context, number, count)
     }
 
     /** The notification for [number] was opened or swiped away: forget its count. */
-    fun clear(context: Context, number: String) {
+    fun clear(context: Context, rawNumber: String) {
+        val number = localNumber(rawNumber).ifEmpty { rawNumber }
         prefs(context).edit { remove(number) }
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.cancel(idFor(number))
@@ -67,7 +70,8 @@ object MissedCallLog {
             id,
             Notification.Builder(context, CHANNEL)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(if (count > 1) "$number ($count)" else number)
+                // Saved contact: its name; else the number.
+                .setContentTitle((ContactsStore.find(context, number)?.name ?: number).let { if (count > 1) "$it ($count)" else it })
                 .setContentText(if (count > 1) "Missed $count calls" else "Missed call")
                 .setCategory(Notification.CATEGORY_MISSED_CALL)
                 .setContentIntent(open)

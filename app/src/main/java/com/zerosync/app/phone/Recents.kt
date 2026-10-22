@@ -8,6 +8,7 @@ import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,14 +54,14 @@ private val MissedRed = Color(0xFFD32F2F)
 private const val MAX_CALLS = 500
 
 /** One line in Recents: back-to-back calls with the same number and type are grouped. */
-data class RecentCall(val number: String, val name: String?, val type: Int, val time: Long, val count: Int)
+data class RecentCall(val number: String, val name: String?, val type: Int, val time: Long, val count: Int, val contact: Contact? = null)
 
 /**
  * Recents = Android's own call history (the same list every phone app shows).
  * Read-only; nothing is copied. Tap a line = call that number back.
  */
 @Composable
-fun RecentsList(onCall: (String) -> Unit, modifier: Modifier = Modifier) {
+fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(hasCallLog(context)) }
     var reload by remember { mutableIntStateOf(0) }
@@ -84,7 +85,7 @@ fun RecentsList(onCall: (String) -> Unit, modifier: Modifier = Modifier) {
         return
     }
 
-    val calls by produceState<List<RecentCall>?>(null, reload) {
+    val calls by produceState<List<RecentCall>?>(null, reload, ContactsStore.version) {
         value = withContext(Dispatchers.IO) { runCatching { loadRecents(context) }.getOrDefault(emptyList()) }
     }
     val list = calls
@@ -94,13 +95,23 @@ fun RecentsList(onCall: (String) -> Unit, modifier: Modifier = Modifier) {
             Text("No calls yet", color = ZsColors.Secondary)
         }
         else -> LazyColumn(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            items(list) { call -> RecentRow(call) { if (call.number.isNotBlank()) onCall(call.number) } }
+            items(list) { call ->
+                RecentRow(
+                    call,
+                    // Hold = save this number (or open its contact if already saved).
+                    onLongClick = {
+                        if (call.number.isNotBlank()) {
+                            onSave(call.contact ?: Contact(numbers = listOf(ContactNumber(localNumber(call.number)))))
+                        }
+                    },
+                ) { if (call.number.isNotBlank()) onCall(call.number) }
+            }
         }
     }
 }
 
 @Composable
-private fun RecentRow(call: RecentCall, onClick: () -> Unit) {
+private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onClick: () -> Unit) {
     val missed = call.type == CallLog.Calls.MISSED_TYPE || call.type == CallLog.Calls.REJECTED_TYPE
     val (icon, label) = when (call.type) {
         CallLog.Calls.OUTGOING_TYPE -> ZsIcons.CallMade to "Outgoing"
@@ -113,14 +124,15 @@ private fun RecentRow(call: RecentCall, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Arrow color: red = missed / declined, green = calls that connected or were made.
         Icon(icon, contentDescription = label, tint = if (missed) MissedRed else CalledGreen, modifier = Modifier.size(20.dp))
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
-            val title = (call.name ?: call.number.ifBlank { "Unknown" }) + if (call.count > 1) " (${call.count})" else ""
+            // Saved in ZeroSync = name first; else the phone's name; else the number.
+            val title = (call.contact?.name ?: call.name ?: call.number.ifBlank { "Unknown" }) + if (call.count > 1) " (${call.count})" else ""
             Text(title, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 label + " · " + DateUtils.getRelativeTimeSpanString(call.time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
@@ -128,6 +140,8 @@ private fun RecentRow(call: RecentCall, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
             )
         }
+        // Network logo (NTC / Ncell), nothing for unknown numbers.
+        CarrierLogo(call.number, Modifier.padding(end = 14.dp).size(22.dp))
         Icon(ZsIcons.Phone, contentDescription = "Call back", tint = ZsColors.Secondary, modifier = Modifier.size(20.dp))
     }
 }
@@ -152,10 +166,10 @@ private fun loadRecents(context: Context): List<RecentCall> {
             val time = c.getLong(3)
             val last = out.lastOrNull()
             // Same person, same kind of call, right after each other = one line with a count.
-            if (last != null && last.number == number && last.type == type) {
+            if (last != null && localNumber(last.number) == localNumber(number) && last.type == type) {
                 out[out.lastIndex] = last.copy(count = last.count + 1)
             } else {
-                out.add(RecentCall(number, name, type, time, 1))
+                out.add(RecentCall(number, name, type, time, 1, ContactsStore.find(context, number)))
             }
         }
     }

@@ -2,6 +2,7 @@ package com.zerosync.app.music
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -30,11 +31,14 @@ val TwoParts = listOf(0f, 180f)              // right, left
  */
 @Composable
 fun rememberMenuPop(open: Boolean): Float {
-    val anim = remember { Animatable(1f) }
+    // Rests at the small size, so the very first frame of the menu is already small
+    // (starting at full size and snapping down caused a flicker).
+    val anim = remember { Animatable(0.6f) }
     LaunchedEffect(open) {
         if (open) {
-            anim.snapTo(0.6f)
-            anim.animateTo(1f, tween(120))
+            anim.animateTo(1f, tween(120, easing = FastOutSlowInEasing))
+        } else {
+            anim.snapTo(0.6f) // ready for next time (menu isn't drawn while closed)
         }
     }
     return anim.value

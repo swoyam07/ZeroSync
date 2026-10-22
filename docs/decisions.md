@@ -15,6 +15,7 @@
 | 2026-10-21 | Files viewers | PdfRenderer + own docx/pptx/xlsx reader, no libraries | Offline, small; simplified layout |
 | 2026-10-22 | Phone | Default Phone app role + InCallService + own call screen (Option A) | Only way to show own answer UI |
 | 2026-10-22 | Phone recents | Android's own call history (READ_CALL_LOG), no private copy | Same privacy either way; full history, no extra storage |
+| 2026-10-22 | Phone contacts | Own private store, AES-GCM + Android Keystore, no shared contacts | User wants contacts only ZeroSync can read |
 | 2026-10-18 | Music playback | ExoPlayer in ViewModel; NO service/notification (media3-session removed) | User doesn't want a notification; screen-off play is enough |
 
 ## Open questions

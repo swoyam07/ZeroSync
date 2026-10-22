@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -107,13 +108,24 @@ class CallActivity : ComponentActivity() {
 private fun CallerHeader(status: String) {
     Column(Modifier.statusBarsPadding().padding(top = 72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(status, color = ZsColors.Secondary, style = MaterialTheme.typography.labelLarge)
+        // In call: saved name big with the number under it; else just the number.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val number = CallManager.number
+        val name by androidx.compose.runtime.produceState<String?>(null, number) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.find(context, number)?.name }
+        }
         Text(
-            CallManager.number,
+            name ?: number,
             color = Color.White,
             fontSize = 34.sp,
             fontWeight = FontWeight.Light,
             modifier = Modifier.padding(top = 12.dp),
         )
+        // Number (when a name is shown) + network logo (NTC / Ncell), nothing if unknown.
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            CarrierLogo(number, Modifier.size(22.dp))
+            if (name != null) Text(number, color = ZsColors.Secondary, modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }
 
@@ -145,9 +157,19 @@ private fun IncomingCall() {
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Saved names come later (contacts); for now the number is the title.
-        Text(number, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Normal, modifier = Modifier.padding(top = 48.dp))
-        Text("Mobile • $number", color = ZsColors.OnSurface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 6.dp))
+        // Saved contact: name big, "Work • number" under it. Unknown: number big.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val contact by androidx.compose.runtime.produceState<Contact?>(null, number) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.find(context, number) }
+        }
+        val saved = contact
+        val label = saved?.numbers?.firstOrNull { localNumber(it.number) == localNumber(number) }?.label?.name ?: "Mobile"
+        Text(saved?.name ?: number, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Normal, maxLines = 1, modifier = Modifier.padding(top = 48.dp))
+        // "<label> • number" with the network logo (NTC / Ncell) when we can tell.
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            CarrierLogo(number, Modifier.padding(end = 8.dp).size(22.dp))
+            Text("$label • $number", color = ZsColors.OnSurface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyLarge)
+        }
 
         // Photo spot: empty for now (caller photos come with contacts).
         Box(
@@ -157,7 +179,21 @@ private fun IncomingCall() {
                 .aspectRatio(1f)
                 .clip(WavyCircle)
                 .background(ZsColors.Surface),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            // Contact photo if saved, otherwise empty.
+            if (saved?.hasPhoto == true) {
+                val photo by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, saved.id) {
+                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.photo(context, saved.id) }
+                }
+                photo?.let {
+                    androidx.compose.foundation.Image(
+                        it.asImageBitmap(), contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.weight(1f))
         // Message: decline with a quick text (sent by the phone as a normal SMS).

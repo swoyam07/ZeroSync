@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,6 +83,8 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     var isDefault by remember { mutableStateOf(isDefaultDialer(context)) }
     var number by remember { mutableStateOf(startNumber) }
     var phoneTab by remember { mutableStateOf(PhoneTab.Keypad) }
+    // Contact being created/edited (null = not editing). Fills the whole Phone screen.
+    var editing by remember { mutableStateOf<Contact?>(null) }
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefault = isDefaultDialer(context)
     }
@@ -95,6 +98,13 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         notificationsOn = notificationsAllowed(context)
         isDefault = isDefaultDialer(context)
         onPauseOrDispose { }
+    }
+
+    editing?.let { c ->
+        Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
+            ContactEditor(c, onDone = { editing = null })
+        }
+        return
     }
 
     Column(
@@ -185,12 +195,10 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                     if (hasCallPermission(context)) placeCall(context, n)
                     else { number = n; phoneTab = PhoneTab.Keypad }
                 },
+                onSave = { c -> editing = c },
                 modifier = Modifier.weight(1f),
             )
-            // Next step: private contacts.
-            else -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("${phoneTab.label} — coming next", color = ZsColors.Secondary)
-            }
+            PhoneTab.Contacts -> ContactsList(onOpen = { editing = it }, modifier = Modifier.weight(1f))
         }
         PhoneTabs(
             phoneTab,
@@ -210,6 +218,9 @@ private val CallGreen = Color(0xFF34A853)
 /** Order = left to right on screen: Contacts · Keypad (middle) · Recents. */
 enum class PhoneTab(val label: String) { Contacts("Contacts"), Keypad("Keypad"), Recents("Recents") }
 
+/** Height of every bottom tab slot (= Call button size). */
+private val TabSlotHeight = 64.dp
+
 /** Bottom tabs: Contacts · Keypad/Call · Recents. Icons only, active = white, others gray. */
 @Composable
 private fun PhoneTabs(selected: PhoneTab, onSelect: (PhoneTab) -> Unit, onCall: () -> Unit) {
@@ -218,18 +229,20 @@ private fun PhoneTabs(selected: PhoneTab, onSelect: (PhoneTab) -> Unit, onCall: 
             val active = tab == selected
             // On the Keypad tab the middle button becomes the green Call button (3 buttons, not 4).
             if (tab == PhoneTab.Keypad && active) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(1f).height(TabSlotHeight), contentAlignment = Alignment.Center) {
                     Box(
-                        Modifier.size(64.dp).clip(CircleShape).background(CallGreen).clickable(onClick = onCall),
+                        Modifier.size(TabSlotHeight).clip(CircleShape).background(CallGreen).clickable(onClick = onCall),
                         contentAlignment = Alignment.Center,
                     ) { Icon(ZsIcons.Phone, contentDescription = "Call", tint = Color.White, modifier = Modifier.size(30.dp)) }
                 }
                 return@forEach
             }
             val color = if (active) Color.White else ZsColors.Secondary
+            // Same fixed height as the Call button, so icons never jump when switching tabs.
             Column(
-                Modifier.weight(1f).clickable { onSelect(tab) }.padding(vertical = 8.dp),
+                Modifier.weight(1f).height(TabSlotHeight).clickable { onSelect(tab) },
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
                 val icon = when (tab) {
                     PhoneTab.Keypad -> ZsIcons.Dialpad
