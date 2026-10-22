@@ -14,8 +14,7 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
     Cancel (left of shutter) and Submit N (right).
 - Saved: category tabs Passport · ID · PDF (with counts); each lists only its own captures
   (newest first) with a Public switch. Category = file name prefix.
-- Delete is two-step: swipe a row left → red trash-icon button appears on the right → tap it.
-  Swipe right to hide it. Swiping alone never deletes.
+- Delete is two-step, like the File section: hold a row → "Delete this file?" → red Delete.
 
 ## Privacy (user decision 2026-10-21)
 - Everything is saved PRIVATE in app storage (`filesDir/camera`). Other apps can't see it.

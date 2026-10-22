@@ -115,7 +115,6 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
                             if (saved != null) onSave(saved) else choosing = localNumber(call.number)
                         }
                     },
-                    onAddContact = { onSave(Contact(numbers = listOf(ContactNumber(localNumber(call.number))))) },
                 ) { if (call.number.isNotBlank()) onCall(call.number) }
             }
         }
@@ -124,7 +123,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
 
 @Composable
 /** Tapping the row does nothing (no accidental calls); the phone icon calls; hold = options. */
-private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onAddContact: () -> Unit, onCall: () -> Unit) {
+private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onCall: () -> Unit) {
     val missed = call.type == CallLog.Calls.MISSED_TYPE || call.type == CallLog.Calls.REJECTED_TYPE || call.type == CallLog.Calls.BLOCKED_TYPE
     val (icon, label) = when (call.type) {
         CallLog.Calls.OUTGOING_TYPE -> ZsIcons.CallMade to "Outgoing"
@@ -171,22 +170,12 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onAddContact: (
                 label + " · " + shortTime(call.time) + numberPart,
                 color = ZsColors.Secondary,
                 style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
         // Network logo (NTC / Ncell), nothing for unknown numbers.
-        CarrierLogo(call.number, Modifier.padding(end = 6.dp).size(22.dp))
-        // Not saved yet: add-contact button. Hidden once the number is a contact.
-        if (call.contact == null && call.number.isNotBlank()) {
-            Icon(
-                ZsIcons.PersonAdd, contentDescription = "Create contact", tint = Color.White,
-                modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAddContact).padding(9.dp),
-            )
-        }
-        // Only this button places the call.
-        Icon(
-            ZsIcons.Phone, contentDescription = "Call", tint = CalledGreen,
-            modifier = Modifier.size(40.dp).clip(CircleShape).clickable(enabled = call.number.isNotBlank(), onClick = onCall).padding(9.dp),
-        )
+        // Right side: one gray pill = network logo | divider | call. (Save a contact: hold the line.)
+        CallPill(call.number, onCall, Modifier.padding(start = 8.dp))
     }
 }
 
@@ -243,6 +232,32 @@ private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: ()
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = ZsColors.Secondary) } },
     )
+}
+
+/**
+ * Gray rounded pill: network logo | thin divider | green call button. Only the button calls.
+ * [roomy] = a bit more space inside (Contacts list).
+ */
+@Composable
+internal fun CallPill(number: String, onCall: () -> Unit, modifier: Modifier = Modifier, roomy: Boolean = false) {
+    val gap = if (roomy) 12.dp else 8.dp
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(ZsColors.Surface)
+            .padding(horizontal = if (roomy) 10.dp else 6.dp, vertical = if (roomy) 2.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (carrierOf(number) != null) {
+            CarrierLogo(number, Modifier.padding(horizontal = gap).size(22.dp))
+            Box(Modifier.size(width = 1.dp, height = 24.dp).background(ZsColors.Secondary.copy(alpha = 0.5f)))
+            Box(Modifier.size(width = if (roomy) 4.dp else 0.dp, height = 1.dp))
+        }
+        Icon(
+            ZsIcons.Phone, contentDescription = "Call", tint = CalledGreen,
+            modifier = Modifier.size(40.dp).clip(CircleShape).clickable(enabled = number.isNotBlank(), onClick = onCall).padding(9.dp),
+        )
+    }
 }
 
 /** "now", "5 min", "2 hr", "Yesterday", else a short date like "Oct 21". */

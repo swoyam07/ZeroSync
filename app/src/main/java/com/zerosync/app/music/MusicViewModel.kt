@@ -235,17 +235,18 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    // A Gallery video takes the speaker, which pauses the music. Remember if music was on
-    // when leaving the Music tab, and continue it on return (only while the app stays open).
-    private var resumeOnReturn = false
+    // Gallery videos take the speaker. Music that was playing when you opened Gallery is
+    // paused there and continues as soon as you leave Gallery (any tab), while the app is open.
+    private var resumeAfterGallery = false
 
-    fun onLeaveMusicTab() {
-        resumeOnReturn = player.playWhenReady
+    fun onEnterGallery() {
+        resumeAfterGallery = player.playWhenReady
+        if (resumeAfterGallery) player.pause()
     }
 
-    fun onReturnToMusicTab() {
-        if (resumeOnReturn && !player.isPlaying) player.play()
-        resumeOnReturn = false
+    fun onLeaveGallery() {
+        if (resumeAfterGallery && !player.isPlaying) player.play()
+        resumeAfterGallery = false
     }
 
     fun playPause() {

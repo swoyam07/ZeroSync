@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,15 +119,21 @@ fun FilesScreen(vm: FilesViewModel) {
             return@Column
         }
         if (vm.kind == DocKind.Images || vm.kind == DocKind.Videos) {
-            // Squares, 3 per row; tap = open.
+            // Squares, 3 per row; tap = open. Same order as always, but the grid sits at the
+            // bottom of the screen (above the nav) and opens scrolled to its end; scroll up for more.
+            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            LaunchedEffect(vm.kind, shown.size) { if (shown.isNotEmpty()) gridState.scrollToItem(shown.lastIndex) }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = NavClearance),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                // Wider side margins + gaps = slightly smaller squares with a little space between.
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = NavClearance),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
             ) {
                 gridItems(shown, key = { it.uri.toString() }) { doc ->
-                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(4.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { toDelete = doc })) {
+                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { toDelete = doc })) {
                         Thumbnail(doc.uri, Modifier.fillMaxSize(), sizePx = 360)
                         if (doc.kind == DocKind.Videos) {
                             Icon(
@@ -141,9 +148,15 @@ fun FilesScreen(vm: FilesViewModel) {
             }
             return@Column
         }
+        // Same order as always; the list sits at the bottom of the screen (above the nav) and
+        // opens scrolled to its end, so the rows are in thumb reach. Scroll up for more.
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LaunchedEffect(vm.kind, shown.size) { if (shown.isNotEmpty()) listState.scrollToItem(shown.lastIndex) }
         LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = NavClearance),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
         ) {
             items(shown, key = { it.uri.toString() }) { doc -> FileRow(doc, onLongClick = { toDelete = doc }) { vm.open(doc) } }
         }

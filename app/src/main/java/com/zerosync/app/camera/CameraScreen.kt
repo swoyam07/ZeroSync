@@ -22,6 +22,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -322,6 +323,8 @@ private fun SavedList(vm: CameraViewModel) {
 
 @Composable
 private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
+    var toDelete by remember { mutableStateOf<SavedDoc?>(null) }
+    toDelete?.let { doc -> ConfirmDelete(doc, onDelete = { vm.delete(doc) }, onDismiss = { toDelete = null }) }
     if (docs.isEmpty()) {
         Text(
             "Nothing saved yet",
@@ -345,12 +348,14 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
             )
         }
         items(docs, key = { it.file.name }) { doc ->
-            SwipeToRevealDelete(onDelete = { vm.delete(doc) }) {
+            // Hold = "Delete this file?" (same as the File section). No swipe.
+            run {
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(ZsColors.Surface)
+                        .combinedClickable(onClick = {}, onLongClick = { toDelete = doc })
                         .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -381,47 +386,25 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
     }
 }
 
-/** Red delete: the one color exception, user-approved 2026-10-21 (danger action). */
+/** Red delete: the one color exception, user-approved (danger action). */
 private val DeleteRed = Color(0xFFD32F2F)
-private val DeleteWidth = 88.dp
 
-/**
- * Two-step delete. Swipe the row left: a red trash button shows on the right.
- * Tap it to delete; swipe back right to hide it. Swiping alone never deletes.
- */
+/** "Delete this file?" with a red Delete button; Cancel keeps it. */
 @Composable
-private fun SwipeToRevealDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth()) {
-        if (open) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .size(width = DeleteWidth - 8.dp, height = 60.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(DeleteRed)
-                    .clickable(onClick = onDelete),
-                contentAlignment = Alignment.Center,
-            ) { Icon(ZsIcons.Delete, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(26.dp)) }
-        }
-        Box(
-            Modifier
-                .offset(x = if (open) -DeleteWidth else 0.dp)
-                .pointerInput(Unit) {
-                    var dx = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dx = 0f },
-                        onDragEnd = {
-                            if (dx < -40.dp.toPx()) open = true
-                            if (dx > 40.dp.toPx()) open = false
-                        },
-                    ) { change, amount ->
-                        change.consume()
-                        dx += amount
-                    }
-                },
-        ) { content() }
-    }
+private fun ConfirmDelete(doc: SavedDoc, onDelete: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ZsColors.Surface,
+        title = { Text("Delete this file?", color = Color.White) },
+        text = { Text("${doc.file.name}\nIt will be removed for good.", color = ZsColors.OnSurface) },
+        confirmButton = {
+            Button(
+                onClick = { onDelete(); onDismiss() },
+                colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
+            ) { Text("Delete") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = ZsColors.Secondary) } },
+    )
 }
 
 /** Small preview: the photo itself, or a file icon for PDFs. Decoded small, off the main thread. */

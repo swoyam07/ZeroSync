@@ -68,7 +68,7 @@ private val DeleteRed = Color(0xFFD32F2F)
 
 /** Contacts tab: private list, "+" to add. Tap = edit. */
 @Composable
-fun ContactsList(onOpen: (Contact) -> Unit, onSpam: () -> Unit, modifier: Modifier = Modifier) {
+fun ContactsList(onOpen: (Contact) -> Unit, onSpam: () -> Unit, onCall: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val contacts by produceState(emptyList<Contact>(), ContactsStore.version) {
         value = withContext(Dispatchers.IO) { ContactsStore.all(context) }
@@ -111,7 +111,8 @@ fun ContactsList(onOpen: (Contact) -> Unit, onSpam: () -> Unit, modifier: Modifi
                             Text("${it.label.name} • ${it.number}", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    c.numbers.firstOrNull()?.let { CarrierLogo(it.number, Modifier.size(20.dp)) }
+                    // Same call pill as Recents; calls the first number.
+                    c.numbers.firstOrNull()?.let { n -> CallPill(n.number, { onCall(n.number) }, Modifier.padding(start = 8.dp)) }
                 }
             }
         }

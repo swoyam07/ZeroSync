@@ -233,7 +233,15 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 onSave = { c -> editing = c },
                 modifier = Modifier.weight(1f),
             )
-            PhoneTab.Contacts -> ContactsList(onOpen = { editing = it }, onSpam = { spamOpen = true }, modifier = Modifier.weight(1f))
+            PhoneTab.Contacts -> ContactsList(
+                onOpen = { editing = it },
+                onSpam = { spamOpen = true },
+                onCall = { n ->
+                    if (hasCallPermission(context)) placeCall(context, n)
+                    else { number = n; phoneTab = PhoneTab.Keypad }
+                },
+                modifier = Modifier.weight(1f),
+            )
         }
         PhoneTabs(
             phoneTab,
