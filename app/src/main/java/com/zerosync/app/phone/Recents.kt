@@ -181,7 +181,7 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onCall: () -> U
 
 /**
  * Save an unsaved number: "New contact", or pick an existing contact to add it to
- * (the number is added as Personal; the editor opens so you can change the label and Save).
+ * (the number is added as Friends; the editor opens so you can change the label and Save).
  */
 @Composable
 private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: () -> Unit) {
@@ -235,7 +235,7 @@ private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: ()
 }
 
 /**
- * Gray rounded pill: network logo | thin divider | green call button. Only the button calls.
+ * Gray rounded pill: network logo | thin divider | green phone. Tapping anywhere on it calls.
  * [roomy] = a bit more space inside (Contacts list).
  */
 @Composable
@@ -245,6 +245,8 @@ internal fun CallPill(number: String, onCall: () -> Unit, modifier: Modifier = M
         modifier
             .clip(RoundedCornerShape(50))
             .background(ZsColors.Surface)
+            // The WHOLE pill (logo, divider, phone) is one call button.
+            .clickable(enabled = number.isNotBlank(), onClick = onCall)
             .padding(horizontal = if (roomy) 10.dp else 6.dp, vertical = if (roomy) 2.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -255,7 +257,7 @@ internal fun CallPill(number: String, onCall: () -> Unit, modifier: Modifier = M
         }
         Icon(
             ZsIcons.Phone, contentDescription = "Call", tint = CalledGreen,
-            modifier = Modifier.size(40.dp).clip(CircleShape).clickable(enabled = number.isNotBlank(), onClick = onCall).padding(9.dp),
+            modifier = Modifier.size(40.dp).padding(9.dp),
         )
     }
 }

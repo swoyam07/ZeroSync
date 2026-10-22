@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.zerosync.app.ui.theme.ZeroSyncTheme
 import com.zerosync.app.ui.theme.ZsColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** Red for end/decline: same approved danger-color exception as Delete. */
@@ -126,6 +127,13 @@ private fun CallerHeader(status: String) {
             CarrierLogo(number, Modifier.size(22.dp))
             if (name != null) Text(number, color = ZsColors.Secondary, modifier = Modifier.padding(start = 8.dp))
         }
+        // Which SIM this call uses, e.g. "SIM 1 · Ncell".
+        val sim by androidx.compose.runtime.produceState<SimCard?>(null, CallManager.call, CallManager.state) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                simForCall(context, CallManager.call?.details?.accountHandle)
+            }
+        }
+        sim?.let { SimChip(it, Modifier.padding(top = 10.dp)) }
     }
 }
 
@@ -163,7 +171,7 @@ private fun IncomingCall() {
             value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.find(context, number) }
         }
         val saved = contact
-        val label = saved?.numbers?.firstOrNull { localNumber(it.number) == localNumber(number) }?.label?.name ?: "Mobile"
+        val label = saved?.numbers?.firstOrNull { localNumber(it.number) == localNumber(number) }?.label?.title ?: "Mobile"
         Text(saved?.name ?: number, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Normal, maxLines = 1, modifier = Modifier.padding(top = 48.dp))
         // "<label> • number" with the network logo (NTC / Ncell) when we can tell.
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -247,7 +255,12 @@ private fun IncomingCall() {
 /** Bar: Decline (left) · white phone handle (middle) · Answer (right). Drag handle to choose. */
 @Composable
 private fun AnswerBar(modifier: Modifier = Modifier) {
-    var drag by remember { mutableFloatStateOf(0f) }
+    // Handle position. Past the edge it STAYS there (no jump back to the middle) and the
+    // call is answered / declined; the in-call screen then replaces it directly.
+    // Let go before the edge = it glides back to the middle.
+    val drag = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var done by remember { mutableStateOf(false) }
     Box(
         modifier
             .fillMaxWidth()
@@ -260,24 +273,37 @@ private fun AnswerBar(modifier: Modifier = Modifier) {
         Text("Answer", color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
         Box(
             Modifier
-                .offset { IntOffset(drag.roundToInt(), 0) }
+                .offset { IntOffset(drag.value.roundToInt(), 0) }
                 .size(width = 96.dp, height = 68.dp)
                 .clip(RoundedCornerShape(50))
                 .background(Color.White)
                 .pointerInput(Unit) {
                     val limit = 80.dp.toPx()
+                    val edge = limit * 1.3f
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            when {
-                                drag >= limit -> CallManager.answer()
-                                drag <= -limit -> CallManager.decline()
+                            if (done) return@detectHorizontalDragGestures
+                            scope.launch {
+                                when {
+                                    drag.value >= limit -> {
+                                        done = true
+                                        drag.animateTo(edge, androidx.compose.animation.core.tween(90))
+                                        CallManager.answer()
+                                    }
+                                    drag.value <= -limit -> {
+                                        done = true
+                                        drag.animateTo(-edge, androidx.compose.animation.core.tween(90))
+                                        CallManager.decline()
+                                    }
+                                    else -> drag.animateTo(0f, androidx.compose.animation.core.tween(180))
+                                }
                             }
-                            drag = 0f
                         },
-                        onDragCancel = { drag = 0f },
+                        onDragCancel = { if (!done) scope.launch { drag.animateTo(0f, androidx.compose.animation.core.tween(180)) } },
                     ) { change, dx ->
+                        if (done) return@detectHorizontalDragGestures
                         change.consume()
-                        drag = (drag + dx).coerceIn(-limit * 1.3f, limit * 1.3f)
+                        scope.launch { drag.snapTo((drag.value + dx).coerceIn(-edge, edge)) }
                     }
                 },
             contentAlignment = Alignment.Center,
@@ -360,7 +386,7 @@ private fun InCall() {
             Box(
                 Modifier.size(72.dp).clip(CircleShape).background(EndRed).clickable { CallManager.hangUp() },
                 contentAlignment = Alignment.Center,
-            ) { Text("End", color = Color.White, fontWeight = FontWeight.SemiBold) }
+            ) { Icon(ZsIcons.CallEnd, contentDescription = "End call", tint = Color.White, modifier = Modifier.size(34.dp)) }
         }
     }
 }

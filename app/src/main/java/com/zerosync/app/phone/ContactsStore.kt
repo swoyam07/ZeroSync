@@ -19,7 +19,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-enum class NumberLabel { Personal, Home, Work }
+/** [title] = what the user sees. Stored names stay "Personal"/"Home" so saved contacts still load. */
+enum class NumberLabel(val title: String) { Personal("Friends"), Home("Family"), Work("Work") }
 
 data class ContactNumber(val number: String, val label: NumberLabel = NumberLabel.Personal)
 

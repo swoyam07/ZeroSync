@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -84,9 +85,23 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     var isDefault by remember { mutableStateOf(isDefaultDialer(context)) }
     var number by remember { mutableStateOf(startNumber) }
     var phoneTab by remember { mutableStateOf(PhoneTab.Keypad) }
+    // Your active SIMs (two = per-SIM call buttons on Keypad and Contacts).
+    var simsTick by remember { mutableStateOf(0) }
+    val sims by androidx.compose.runtime.produceState(emptyList<SimCard>(), simsTick) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activeSims(context) }
+    }
     // Contact being created/edited (null = not editing). Fills the whole Phone screen.
     var editing by remember { mutableStateOf<Contact?>(null) }
     var spamOpen by remember { mutableStateOf(false) }
+    var favOpen by remember { mutableStateOf(false) }
+    // Network whose quick codes are shown (null = closed).
+    var codesFor by remember { mutableStateOf<Carrier?>(null) }
+    // Number waiting for "SIM 1 or SIM 2?" (null = no pop-up).
+    var askSimFor by remember { mutableStateOf<String?>(null) }
+    // Call through [sim]; no SIM chosen + two SIMs (e.g. a landline) = small pop-up asks first.
+    val dial: (String, SimCard?) -> Unit = { n, sim ->
+        if (sim == null && sims.size >= 2) askSimFor = n else placeCall(context, n, sim)
+    }
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefault = isDefaultDialer(context)
     }
@@ -111,10 +126,26 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         overlayOn = CallOverlay.canShow(context)
         isSmsApp = isDefaultSms(context)
         resumeTick++
+        simsTick++
         isDefault = isDefaultDialer(context)
         onPauseOrDispose { }
     }
 
+    // Quick code: dial it from THAT network's SIM (NTC code → NTC SIM, Ncell code → Ncell SIM).
+    codesFor?.let { c ->
+        ServiceCodesDialog(c, onDial = { code ->
+            codesFor = null
+            if (!hasCallPermission(context)) callPermission.launch(Manifest.permission.CALL_PHONE)
+            else dial(code, sims.firstOrNull { it.carrier == c })
+        }, onDismiss = { codesFor = null })
+    }
+    askSimFor?.let { n -> SimChoiceDialog(n, sims, onPick = { sim -> askSimFor = null; placeCall(context, n, sim) }, onDismiss = { askSimFor = null }) }
+    if (favOpen) {
+        Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
+            FavoritesScreen(onDone = { favOpen = false })
+        }
+        return
+    }
     if (spamOpen) {
         Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
             SpamListScreen(onDone = { spamOpen = false })
@@ -157,7 +188,37 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         }
         // ZeroSync's own incoming-call card while the phone is unlocked needs this.
         // Top: Messages icon with the unread count (on Contacts it sits in that tab's header row).
-        if (phoneTab != PhoneTab.Contacts) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+        // Left: SIM used for calls ("SIM 1 · Ncell"); hidden when the phone has no default SIM.
+        val simText by androidx.compose.runtime.produceState<String?>(null, resumeTick) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val sims = activeSims(context)
+                when {
+                    sims.isEmpty() -> null
+                    // Two SIMs with no default: show nothing (the Call 1 / Call 2 capsule covers it).
+                    else -> callingSim(context)?.label
+                }
+            }
+        }
+        if (phoneTab != PhoneTab.Contacts) Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            simText?.let { t ->
+                Text(
+                    t,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface).padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            } ?: Box(Modifier)
+            // NTC / Ncell quick codes (balance, packs, credit), Keypad tab only.
+            if (phoneTab == PhoneTab.Keypad) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NetworkButton(Carrier.Ntc, { codesFor = Carrier.Ntc })
+                    NetworkButton(Carrier.Ncell, { codesFor = Carrier.Ncell })
+                }
+            }
             Box(contentAlignment = Alignment.TopEnd) {
                 Box(
                     Modifier.size(48.dp).clip(CircleShape).background(ZsColors.Surface)
@@ -266,11 +327,14 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                     }
                 }
             }
+            // Saved contacts matching the typed digits (3+), shown above the keys. Nothing
+            // changes unless you TAP one: then its number replaces what you typed.
+            DialSuggestions(number, onPick = { number = it })
             Dialpad(onKey = { number += it }, onLongZero = { number += '+' })
             }
             PhoneTab.Recents -> RecentsList(
                 onCall = { n ->
-                    if (hasCallPermission(context)) placeCall(context, n)
+                    if (hasCallPermission(context)) dial(n, bestSimFor(context, n, sims))
                     else { number = n; phoneTab = PhoneTab.Keypad }
                 },
                 onSave = { c -> editing = c },
@@ -279,10 +343,16 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
             PhoneTab.Contacts -> ContactsList(
                 onOpen = { editing = it },
                 onSpam = { spamOpen = true },
+                onFavorites = { favOpen = true },
+                sims = sims,
+                onCallWith = { n, sim ->
+                    if (hasCallPermission(context)) dial(n, sim)
+                    else { number = n; phoneTab = PhoneTab.Keypad }
+                },
                 unreadMessages = unread,
                 onMessages = { context.startActivity(android.content.Intent(context, com.zerosync.app.sms.MessagesActivity::class.java)) },
                 onCall = { n ->
-                    if (hasCallPermission(context)) placeCall(context, n)
+                    if (hasCallPermission(context)) dial(n, null)
                     else { number = n; phoneTab = PhoneTab.Keypad }
                 },
                 modifier = Modifier.weight(1f),
@@ -291,9 +361,18 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         PhoneTabs(
             phoneTab,
             onSelect = { phoneTab = it },
-            onCall = {
+            onCall = { sim ->
                 if (number.isBlank()) return@PhoneTabs
-                if (hasCallPermission(context)) placeCall(context, number)
+                if (hasCallPermission(context)) dial(number, sim)
+                else callPermission.launch(Manifest.permission.CALL_PHONE)
+            },
+            sims = sims,
+            typed = number,
+            // Favorite: same-network SIM (NTC→NTC, Ncell→Ncell) like every other call.
+            onFavorite = { slot ->
+                val n = Favorites.get(context, slot)
+                if (n == null) { favOpen = true }
+                else if (hasCallPermission(context)) dial(n, bestSimFor(context, n, sims))
                 else callPermission.launch(Manifest.permission.CALL_PHONE)
             },
         )
@@ -306,23 +385,80 @@ private val CallGreen = Color(0xFF34A853)
 /** Order = left to right on screen: Contacts · Keypad (middle) · Recents. */
 enum class PhoneTab(val label: String) { Contacts("Contacts"), Keypad("Keypad"), Recents("Recents") }
 
+/**
+ * Up to 5 saved contacts whose number contains the typed digits (any form, +977 ignored),
+ * as a sideways row of chips: name + matching number. Tap = put that number in the dialer.
+ */
+@Composable
+private fun DialSuggestions(typed: String, onPick: (String) -> Unit) {
+    val context = LocalContext.current
+    val digits = localNumber(typed)
+    val contacts by androidx.compose.runtime.produceState(emptyList<Contact>(), ContactsStore.version) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ContactsStore.all(context) }
+    }
+    val matches = remember(digits, contacts) {
+        if (digits.length < 3) emptyList()
+        else contacts.flatMap { c -> c.numbers.filter { localNumber(it.number).contains(digits) }.map { c to it.number } }
+            .filter { localNumber(it.second) != digits } // already fully typed: nothing to suggest
+            .take(5)
+    }
+    // Fixed height so the keypad doesn't jump when suggestions appear / disappear.
+    androidx.compose.foundation.lazy.LazyRow(
+        Modifier.fillMaxWidth().height(44.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items(matches.size) { i ->
+            val (c, n) = matches[i]
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface).clickable { onPick(localNumber(n)) }
+                    .padding(start = 6.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(c, 28.dp)
+                Column(Modifier.padding(start = 8.dp)) {
+                    Text(c.name, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    Text(localNumber(n), color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
 /** Height of every bottom tab slot (= Call button size). */
 private val TabSlotHeight = 64.dp
 
 /** Bottom tabs: Contacts · Keypad/Call · Recents. Icons only, active = white, others gray. */
 @Composable
-private fun PhoneTabs(selected: PhoneTab, onSelect: (PhoneTab) -> Unit, onCall: () -> Unit) {
+private fun PhoneTabs(
+    selected: PhoneTab,
+    onSelect: (PhoneTab) -> Unit,
+    onCall: (SimCard?) -> Unit,
+    sims: List<SimCard> = emptyList(),
+    typed: String = "",
+    onFavorite: (FavSlot) -> Unit = {},
+) {
     // Nudged a bit lower (offset), closer to the nav strip.
     Row(Modifier.fillMaxWidth().padding(top = 12.dp).offset(y = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         PhoneTab.entries.forEach { tab ->
             val active = tab == selected
             // On the Keypad tab the middle button becomes the green Call button (3 buttons, not 4).
             if (tab == PhoneTab.Keypad && active) {
-                Box(Modifier.weight(1f).height(TabSlotHeight), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier.size(TabSlotHeight).clip(CircleShape).background(CallGreen).clickable(onClick = onCall),
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(ZsIcons.Phone, contentDescription = "Call", tint = Color.White, modifier = Modifier.size(30.dp)) }
+                // zIndex: the favorites menu is drawn on top of the neighbor tab icons.
+                Box(Modifier.weight(1f).height(TabSlotHeight).zIndex(1f), contentAlignment = Alignment.Center) {
+                    // One green call button. Once the typed number's network is known (first 3
+                    // digits), it turns that network's color (NTC blue / Ncell purple) and calls
+                    // from YOUR SIM on the same network (NTC→NTC, Ncell→Ncell), else your default.
+                    val context = LocalContext.current
+                    val net = carrierOf(typed)
+                    // Tap = call typed number; drag ↑ → ↓ ← = call that favorite (no hold needed).
+                    FavCallButton(
+                        color = net?.let { Color(it.color) } ?: CallGreen,
+                        size = TabSlotHeight,
+                        onTap = { onCall(bestSimFor(context, typed, sims)) }, // unknown network + 2 SIMs = asks which SIM
+                        onFavorite = onFavorite,
+                    )
                 }
                 return@forEach
             }
@@ -388,9 +524,7 @@ private fun isDefaultDialer(context: Context): Boolean =
 private fun hasCallPermission(context: Context) =
     ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
 
-private fun placeCall(context: Context, number: String) {
+private fun placeCall(context: Context, number: String, sim: SimCard? = null) {
     if (!hasCallPermission(context)) return
-    runCatching {
-        context.getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), null)
-    }
+    placeCallWith(context, number, sim)
 }

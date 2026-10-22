@@ -27,7 +27,7 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   digits (after removing +977 / 00977): NTC 984/985/986/974/975/976, Ncell 980/981/982/970; anything else
   (e.g. 01 landlines) shows no logo. Shown on the incoming-call screen and in Recents.
 - Contacts (private, `ContactsStore.kt` + `ContactsUi.kt`): name (required), 1+ numbers each
-  Personal (default) / Home / Work, description, optional photo (system photo picker, ≤512 px).
+  Friends (default) / Family / Work, description, optional photo (system photo picker, ≤512 px).
   Stored only in app-private files, AES-256-GCM with a hardware-backed Android Keystore key
   (contacts.bin + <id>.photo). Never in the phone's shared contacts, no backup.
   Numbers match in any form (+977, spaces). Shown as name on: incoming screen (+ label, photo),
@@ -42,6 +42,20 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   (CallScreeningService, default-dialer role) rejects spam before it rings: no ringtone, no UI,
   no notification; still logged → Recents shows it with a red "Spam" tag. CallService rejects
   spam too as a backup and never counts it as missed.
+- SIMs (`SimInfo.kt`, `SimCall.kt`): dial pad shows the calling SIM ("SIM 2 · Ncell" / "Ask each
+  time"); call screen shows the SIM in use. With TWO active SIMs: Keypad shows Call 1 / Call 2,
+  Contacts rows show "1" / "2" buttons. Each SIM dials the contact's number on the SAME network
+  if they have one (NTC→NTC, Ncell→Ncell, usually cheaper), else their first number. Green =
+  same network (recommended); gray = different network, still allowed. Call forced through the
+  chosen SIM via EXTRA_PHONE_ACCOUNT_HANDLE. One SIM: single call button as before.
+- Favorites (`Favorites.kt`, `FavCallButton.kt`): 4 slots ↑ → ↓ ← (private prefs). ★ in the
+  Contacts header opens them: pick a contact number or type one; ✕ clears. Keypad call button:
+  tap = call typed number; drag (no hold) = 4-way menu (pads show the favorite's initial / last 2
+  digits, "+" if empty), drag onto one and release = call it from the same-network SIM. Empty
+  slot opens the Favorites screen. Release in the middle = cancel.
+- Quick codes (`ServiceCodes.kt`): NTC (blue) / Ncell (purple) buttons at the top of the Keypad.
+  NTC: Balance *400#, Pack *1415#, Data balance *1414*55#, Credit *1477#. Ncell: Balance *901#,
+  Pack *123#, Credit *9988#. Tap = dialed from that network's SIM (system shows the reply).
 
 ## Permissions
 CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock

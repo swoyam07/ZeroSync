@@ -71,8 +71,11 @@ private val DeleteRed = Color(0xFFD32F2F)
 fun ContactsList(
     onOpen: (Contact) -> Unit,
     onSpam: () -> Unit,
+    onFavorites: () -> Unit = {},
     onCall: (String) -> Unit,
     modifier: Modifier = Modifier,
+    sims: List<SimCard> = emptyList(),
+    onCallWith: (String, SimCard) -> Unit = { n, _ -> onCall(n) },
     unreadMessages: Int = 0,
     onMessages: () -> Unit = {},
 ) {
@@ -83,7 +86,11 @@ fun ContactsList(
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Contacts", color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            // One row: Messages (with unread count) · Spam · + (create contact).
+            // One row: ★ Favorites · Messages (with unread count) · Spam · + (create contact).
+            Box(
+                Modifier.padding(end = 10.dp).size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onFavorites),
+                contentAlignment = Alignment.Center,
+            ) { Text("★", color = Color.White, fontSize = 20.sp) }
             Box(Modifier.padding(end = 10.dp), contentAlignment = Alignment.TopEnd) {
                 Box(
                     Modifier.size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onMessages),
@@ -122,11 +129,21 @@ fun ContactsList(
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
                         Text(c.name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         c.numbers.firstOrNull()?.let {
-                            Text("${it.label.name} • ${it.number}", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
+                            Text(it.label.title /* category only, no number */, color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     // Same call pill as Recents; calls the first number.
-                    c.numbers.firstOrNull()?.let { n -> CallPill(n.number, { onCall(n.number) }, Modifier.padding(start = 8.dp)) }
+                    val saved = c.numbers.filter { it.number.isNotBlank() }
+                    if (saved.isNotEmpty()) {
+                        // One capsule, one segment per number (1 to 3) in that number's
+                        // network color (NTC blue, Ncell purple, black otherwise). Each calls that number from
+                        // YOUR SIM on the same network (NTC→NTC, Ncell→Ncell), else your default SIM.
+                        val context = LocalContext.current
+                        NumberCallCapsule(saved.map { it.number }, Modifier.padding(start = 8.dp)) { n ->
+                            val sim = bestSimFor(context, n, sims)
+                            if (sim != null) onCallWith(n, sim) else onCall(n)
+                        }
+                    }
                 }
             }
         }
@@ -176,7 +193,23 @@ fun ContactEditor(start: Contact, onDone: () -> Unit) {
             removePhoto = false
         }
     }
-    val canSave = name.isNotBlank() && numbers.any { it.number.isNotBlank() }
+    // Every number must be unique: not twice in this contact, not in another contact.
+    // Compared without +977 / spaces, so "+9779841000000" and "9841000000" count as the same.
+    val others by androidx.compose.runtime.produceState(emptyList<Contact>(), ContactsStore.version) {
+        value = withContext(Dispatchers.IO) { ContactsStore.all(context).filter { it.id != start.id } }
+    }
+    val problems = numbers.mapIndexed { i, n ->
+        val key = localNumber(n.number)
+        when {
+            key.isEmpty() -> null
+            numbers.take(i).any { localNumber(it.number) == key } -> "Already added above"
+            else -> others.firstOrNull { o -> o.numbers.any { localNumber(it.number) == key } }?.let { "Already saved for ${it.name}" }
+        }
+    }
+    val canSave = name.isNotBlank() && numbers.any { it.number.isNotBlank() } && problems.all { it == null }
+    // Anything edited compared to when the screen opened?
+    val changed = name != start.name || description != start.description || newPhoto != null ||
+        removePhoto || numbers.filter { it.number.isNotBlank() } != start.numbers.filter { it.number.isNotBlank() }
     val save: () -> Unit = {
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -200,9 +233,11 @@ fun ContactEditor(start: Contact, onDone: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             if (start.id.isNotEmpty()) {
-                RoundIcon(ZsIcons.Delete, "Delete", DeleteRed, Color.White, { confirmDelete = true }, Modifier.padding(end = 8.dp))
+                // Delete: gray circle, white icon (no red).
+                RoundIcon(ZsIcons.Delete, "Delete", ZsColors.Surface, Color.White, { confirmDelete = true }, Modifier.padding(end = 8.dp))
             }
-            RoundIcon(ZsIcons.Check, "Save", if (canSave) SaveGreen else ZsColors.Surface, if (canSave) Color.White else ZsColors.Secondary, { if (canSave) save() })
+            // Save: only when something changed (white circle, black ✓; no green).
+            if (changed) RoundIcon(ZsIcons.Check, "Save", if (canSave) Color.White else ZsColors.Surface, if (canSave) Color.Black else ZsColors.Secondary, { if (canSave) save() })
         }
 
         Column(
@@ -260,6 +295,9 @@ fun ContactEditor(start: Contact, onDone: () -> Unit) {
             // ---- Numbers card ----
             SectionCard("Numbers") {
                 numbers.forEachIndexed { i, n ->
+                    problems.getOrNull(i)?.let { msg ->
+                        Text(msg, color = DeleteRed, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 28.dp, top = 4.dp))
+                    }
                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
                             CarrierLogo(n.number, Modifier.size(22.dp))
@@ -304,7 +342,7 @@ fun ContactEditor(start: Contact, onDone: () -> Unit) {
             }
 
             if (!canSave) {
-                Text("Add a name and a number to save.", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 12.dp))
+                Text(if (problems.any { it != null }) "Fix the repeated number to save." else "Add a name and a number to save.", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 12.dp))
             }
             Box(Modifier.size(32.dp))
         }
@@ -392,13 +430,13 @@ private fun PlainField(
     )
 }
 
-/** Dropdown pill: Personal (default) / Home / Work. */
+/** Dropdown pill: Friends (default) / Family / Work. */
 @Composable
 private fun LabelPicker(selected: NumberLabel, onPick: (NumberLabel) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(start = 8.dp)) {
         Text(
-            "${selected.name} ▾",
+            "${selected.title} ▾",
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
@@ -409,7 +447,7 @@ private fun LabelPicker(selected: NumberLabel, onPick: (NumberLabel) -> Unit) {
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = ZsColors.Surface) {
             NumberLabel.entries.forEach { l ->
-                DropdownMenuItem(text = { Text(l.name, color = Color.White) }, onClick = { onPick(l); open = false })
+                DropdownMenuItem(text = { Text(l.title, color = Color.White) }, onClick = { onPick(l); open = false })
             }
         }
     }
