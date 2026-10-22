@@ -37,6 +37,11 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   tap = full screen). Needs "Display over other apps"; the notification then goes on a quiet
   channel (no HyperOS pop-up, no full-screen intent). Without the permission: system pop-up.
   Locked / screen off: unchanged.
+- Spam (`Spam.kt`): unlimited numbers in private prefs (local form). "Spam" button left of + in
+  Contacts opens the list (add / ✕ remove); Recents hold → "Mark as spam". `SpamScreeningService`
+  (CallScreeningService, default-dialer role) rejects spam before it rings: no ringtone, no UI,
+  no notification; still logged → Recents shows it with a red "Spam" tag. CallService rejects
+  spam too as a backup and never counts it as missed.
 
 ## Permissions
 CALL_PHONE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock

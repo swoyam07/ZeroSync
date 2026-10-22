@@ -214,6 +214,19 @@ private fun IncomingCall() {
             )
         }
         Spacer(Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Unknown number: Spam = add to the spam list and decline (future calls won't ring).
+        if (saved == null && number != "Unknown") {
+            Text(
+                "Spam",
+                color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(EndRed)
+                    .clickable { SpamList.add(context, number); CallManager.decline() }
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
         // Message: decline with a quick text (sent by the phone as a normal SMS).
         Row(
             Modifier
@@ -225,6 +238,7 @@ private fun IncomingCall() {
         ) {
             Icon(ZsIcons.Message, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             Text("Message", color = Color.White, modifier = Modifier.padding(start = 8.dp))
+        }
         }
         AnswerBar(Modifier.padding(top = 20.dp, bottom = 72.dp))
     }

@@ -8,6 +8,7 @@ import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -42,6 +44,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.zerosync.app.ui.ZsIcons
@@ -57,7 +61,7 @@ private val MissedRed = Color(0xFFD32F2F)
 private const val MAX_CALLS = 500
 
 /** One line in Recents: back-to-back calls with the same number and type are grouped. */
-data class RecentCall(val number: String, val name: String?, val type: Int, val time: Long, val count: Int, val contact: Contact? = null)
+data class RecentCall(val number: String, val name: String?, val type: Int, val time: Long, val count: Int, val contact: Contact? = null, val spam: Boolean = false)
 
 /**
  * Recents = Android's own call history (the same list every phone app shows).
@@ -90,7 +94,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
         return
     }
 
-    val calls by produceState<List<RecentCall>?>(null, reload, ContactsStore.version) {
+    val calls by produceState<List<RecentCall>?>(null, reload, ContactsStore.version, SpamList.version) {
         value = withContext(Dispatchers.IO) { runCatching { loadRecents(context) }.getOrDefault(emptyList()) }
     }
     val list = calls
@@ -111,6 +115,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
                             if (saved != null) onSave(saved) else choosing = localNumber(call.number)
                         }
                     },
+                    onAddContact = { onSave(Contact(numbers = listOf(ContactNumber(localNumber(call.number))))) },
                 ) { if (call.number.isNotBlank()) onCall(call.number) }
             }
         }
@@ -118,12 +123,14 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
 }
 
 @Composable
-private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onClick: () -> Unit) {
-    val missed = call.type == CallLog.Calls.MISSED_TYPE || call.type == CallLog.Calls.REJECTED_TYPE
+/** Tapping the row does nothing (no accidental calls); the phone icon calls; hold = options. */
+private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onAddContact: () -> Unit, onCall: () -> Unit) {
+    val missed = call.type == CallLog.Calls.MISSED_TYPE || call.type == CallLog.Calls.REJECTED_TYPE || call.type == CallLog.Calls.BLOCKED_TYPE
     val (icon, label) = when (call.type) {
         CallLog.Calls.OUTGOING_TYPE -> ZsIcons.CallMade to "Outgoing"
         CallLog.Calls.MISSED_TYPE -> ZsIcons.CallMissed to "Missed"
         CallLog.Calls.REJECTED_TYPE -> ZsIcons.CallMissed to "Declined"
+        CallLog.Calls.BLOCKED_TYPE -> ZsIcons.CallMissed to "Blocked"
         else -> ZsIcons.CallReceived to "Incoming"
     }
     Row(
@@ -131,7 +138,7 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onClick: () -> 
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .clip(RoundedCornerShape(14.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(onClick = {}, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -140,16 +147,46 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onClick: () -> 
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             // Saved in ZeroSync = name first; else the phone's name; else the number.
             val title = (call.contact?.name ?: call.name ?: call.number.ifBlank { "Unknown" }) + if (call.count > 1) " (${call.count})" else ""
-            Text(title, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                // Spam tag, right of the name.
+                if (call.spam) {
+                    // Short red "S" badge; screen readers say "Spam".
+                    Text(
+                        "S",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .semantics { contentDescription = "Spam" }
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFFD32F2F))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            // "Missed · 5 min" (+ the number when a name is shown above).
+            val numberPart = if (call.contact != null || call.name != null) " · " + localNumber(call.number) else ""
             Text(
-                label + " · " + DateUtils.getRelativeTimeSpanString(call.time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
+                label + " · " + shortTime(call.time) + numberPart,
                 color = ZsColors.Secondary,
                 style = MaterialTheme.typography.labelSmall,
             )
         }
         // Network logo (NTC / Ncell), nothing for unknown numbers.
-        CarrierLogo(call.number, Modifier.padding(end = 14.dp).size(22.dp))
-        Icon(ZsIcons.Phone, contentDescription = "Call back", tint = ZsColors.Secondary, modifier = Modifier.size(20.dp))
+        CarrierLogo(call.number, Modifier.padding(end = 6.dp).size(22.dp))
+        // Not saved yet: add-contact button. Hidden once the number is a contact.
+        if (call.contact == null && call.number.isNotBlank()) {
+            Icon(
+                ZsIcons.PersonAdd, contentDescription = "Create contact", tint = Color.White,
+                modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onAddContact).padding(9.dp),
+            )
+        }
+        // Only this button places the call.
+        Icon(
+            ZsIcons.Phone, contentDescription = "Call", tint = CalledGreen,
+            modifier = Modifier.size(40.dp).clip(CircleShape).clickable(enabled = call.number.isNotBlank(), onClick = onCall).padding(9.dp),
+        )
     }
 }
 
@@ -169,6 +206,15 @@ private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: ()
         title = { Text("Save $number", color = Color.White) },
         text = {
             Column {
+                // Spam on/off for this number.
+                val isSpam = remember(SpamList.version) { SpamList.isSpam(context, number) }
+                Text(
+                    if (isSpam) "✓  Remove from spam" else "⦸  Mark as spam",
+                    color = if (isSpam) Color.White else Color(0xFFD32F2F),
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { if (isSpam) SpamList.remove(context, number) else SpamList.add(context, number); onDismiss() }
+                        .padding(vertical = 12.dp),
+                )
                 Text(
                     "+  New contact",
                     color = Color.White,
@@ -199,10 +245,22 @@ private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: ()
     )
 }
 
-private fun hasCallLog(context: Context) =
+/** "now", "5 min", "2 hr", "Yesterday", else a short date like "Oct 21". */
+private fun shortTime(time: Long): String {
+    val diff = System.currentTimeMillis() - time
+    return when {
+        diff < 60_000L -> "now"
+        diff < 3_600_000L -> "${diff / 60_000L} min"
+        diff < 86_400_000L -> "${diff / 3_600_000L} hr"
+        diff < 2 * 86_400_000L -> "Yesterday"
+        else -> java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(time))
+    }
+}
+
+internal fun hasCallLog(context: Context) =
     ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
-private fun loadRecents(context: Context): List<RecentCall> {
+internal fun loadRecents(context: Context): List<RecentCall> {
     val out = ArrayList<RecentCall>()
     context.contentResolver.query(
         CallLog.Calls.CONTENT_URI,
@@ -222,7 +280,7 @@ private fun loadRecents(context: Context): List<RecentCall> {
             if (last != null && localNumber(last.number) == localNumber(number) && last.type == type) {
                 out[out.lastIndex] = last.copy(count = last.count + 1)
             } else {
-                out.add(RecentCall(number, name, type, time, 1, ContactsStore.find(context, number)))
+                out.add(RecentCall(number, name, type, time, 1, ContactsStore.find(context, number), SpamList.isSpam(context, number)))
             }
         }
     }

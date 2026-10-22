@@ -114,6 +114,16 @@
             android:name=".phone.DeclineReceiver"
             android:exported="false" />
 
+        <!-- Spam: Android asks this before a call rings; spam numbers are rejected silently. -->
+        <service
+            android:name=".phone.SpamScreeningService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+
         <!-- Android's call bridge; only the system can bind it (BIND_INCALL_SERVICE). -->
         <service
             android:name=".phone.CallService"

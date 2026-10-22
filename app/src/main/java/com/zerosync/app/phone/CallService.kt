@@ -35,6 +35,12 @@ class CallService : InCallService() {
     }
 
     override fun onCallAdded(call: Call) {
+        // Backup for spam (normally stopped earlier by SpamScreeningService): reject quietly, no UI.
+        val incoming = call.details.state == Call.STATE_RINGING
+        if (incoming && SpamList.isSpam(this, call.details.handle?.schemeSpecificPart.orEmpty())) {
+            call.reject(false, null)
+            return
+        }
         CallManager.added(call)
         call.registerCallback(overlayWatcher)
         // Any error while showing the ringing UI falls back to the full call screen, never a crash.
@@ -48,7 +54,8 @@ class CallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         // Incoming call that never connected = missed or declined: count it for that number.
         val d = call.details
-        if (d.callDirection == Call.Details.DIRECTION_INCOMING && d.connectTimeMillis == 0L) {
+        val spam = SpamList.isSpam(this, d.handle?.schemeSpecificPart.orEmpty())
+        if (d.callDirection == Call.Details.DIRECTION_INCOMING && d.connectTimeMillis == 0L && !spam) {
             d.handle?.schemeSpecificPart?.takeIf { it.isNotBlank() }?.let { MissedCallLog.add(this, it) }
         }
         call.unregisterCallback(overlayWatcher)

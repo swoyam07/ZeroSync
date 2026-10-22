@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -85,6 +86,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     var phoneTab by remember { mutableStateOf(PhoneTab.Keypad) }
     // Contact being created/edited (null = not editing). Fills the whole Phone screen.
     var editing by remember { mutableStateOf<Contact?>(null) }
+    var spamOpen by remember { mutableStateOf(false) }
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefault = isDefaultDialer(context)
     }
@@ -102,6 +104,12 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
         onPauseOrDispose { }
     }
 
+    if (spamOpen) {
+        Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
+            SpamListScreen(onDone = { spamOpen = false })
+        }
+        return
+    }
     editing?.let { c ->
         Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
             ContactEditor(c, onDone = { editing = null })
@@ -225,7 +233,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 onSave = { c -> editing = c },
                 modifier = Modifier.weight(1f),
             )
-            PhoneTab.Contacts -> ContactsList(onOpen = { editing = it }, modifier = Modifier.weight(1f))
+            PhoneTab.Contacts -> ContactsList(onOpen = { editing = it }, onSpam = { spamOpen = true }, modifier = Modifier.weight(1f))
         }
         PhoneTabs(
             phoneTab,
@@ -251,7 +259,8 @@ private val TabSlotHeight = 64.dp
 /** Bottom tabs: Contacts · Keypad/Call · Recents. Icons only, active = white, others gray. */
 @Composable
 private fun PhoneTabs(selected: PhoneTab, onSelect: (PhoneTab) -> Unit, onCall: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Nudged a bit lower (offset), closer to the nav strip.
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp).offset(y = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         PhoneTab.entries.forEach { tab ->
             val active = tab == selected
             // On the Keypad tab the middle button becomes the green Call button (3 buttons, not 4).
