@@ -97,9 +97,20 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     }
     var notificationsOn by remember { mutableStateOf(notificationsAllowed(context)) }
     var overlayOn by remember { mutableStateOf(CallOverlay.canShow(context)) }
+    var isSmsApp by remember { mutableStateOf(isDefaultSms(context)) }
+    val smsRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isSmsApp = isDefaultSms(context)
+    }
+    // Unread texts for the badge on the message icon (reloads when messages change / on resume).
+    var resumeTick by remember { mutableStateOf(0) }
+    val unread by androidx.compose.runtime.produceState(0, com.zerosync.app.sms.SmsStore.version, resumeTick, isSmsApp) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.zerosync.app.sms.SmsStore.unreadCount(context) }
+    }
     LifecycleResumeEffect(Unit) {
         notificationsOn = notificationsAllowed(context)
         overlayOn = CallOverlay.canShow(context)
+        isSmsApp = isDefaultSms(context)
+        resumeTick++
         isDefault = isDefaultDialer(context)
         onPauseOrDispose { }
     }
@@ -145,6 +156,38 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
             }
         }
         // ZeroSync's own incoming-call card while the phone is unlocked needs this.
+        // Top: Messages icon with the unread count (on Contacts it sits in that tab's header row).
+        if (phoneTab != PhoneTab.Contacts) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(
+                    Modifier.size(48.dp).clip(CircleShape).background(ZsColors.Surface)
+                        .clickable { context.startActivity(android.content.Intent(context, com.zerosync.app.sms.MessagesActivity::class.java)) },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(ZsIcons.Message, contentDescription = "Messages", tint = Color.White, modifier = Modifier.size(24.dp)) }
+                if (unread > 0) com.zerosync.app.sms.UnreadBadge(unread)
+            }
+        }
+        // Messages need ZeroSync as the default SMS app.
+        if (!isSmsApp) {
+            Column(
+                Modifier.padding(horizontal = 24.dp, vertical = 8.dp).clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "To send and receive texts in ZeroSync, set it as the default SMS app.",
+                    color = ZsColors.OnSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = {
+                        val rm = context.getSystemService(RoleManager::class.java)
+                        smsRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
+                    },
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Set as default SMS app") }
+            }
+        }
         if (isDefault && !overlayOn) {
             Column(
                 Modifier.padding(horizontal = 24.dp, vertical = 8.dp).clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface).padding(16.dp),
@@ -236,6 +279,8 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
             PhoneTab.Contacts -> ContactsList(
                 onOpen = { editing = it },
                 onSpam = { spamOpen = true },
+                unreadMessages = unread,
+                onMessages = { context.startActivity(android.content.Intent(context, com.zerosync.app.sms.MessagesActivity::class.java)) },
                 onCall = { n ->
                     if (hasCallPermission(context)) placeCall(context, n)
                     else { number = n; phoneTab = PhoneTab.Keypad }
@@ -332,6 +377,9 @@ fun Dialpad(onKey: (Char) -> Unit, onLongZero: (() -> Unit)? = null) {
 
 private fun notificationsAllowed(context: Context) =
     context.getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()
+
+private fun isDefaultSms(context: Context): Boolean =
+    context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_SMS)
 
 private fun isDefaultDialer(context: Context): Boolean =
     context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER)

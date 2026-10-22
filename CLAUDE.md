@@ -19,7 +19,7 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
 ## Hard rules
 - NEVER add the `INTERNET` permission. App must work fully offline.
 - No data in/out to other apps: no exported components (except those Android requires
-  for the default-dialer role), no ContentProviders, no share intents, backups disabled.
+  for the default-dialer and default-SMS roles), no ContentProviders, no share intents, backups disabled.
   Exception: Camera's per-file Public switch copies a file to shared storage (user-approved).
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
@@ -29,7 +29,7 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
 - Handle backgrounding, process death, config changes, low memory.
 
 ## Where things live (read only what the task needs)
-- Feature specs: `docs/features/<feature>.md` (phone, contacts, gallery, music, files, camera)
+- Feature specs: `docs/features/<feature>.md` (phone, contacts, gallery, music, files, camera, messages)
 - Architecture & navigation: `docs/architecture.md`
 - Open questions / decisions log: `docs/decisions.md`
 - Theme/UI rules auto-load from `.claude/rules/` when editing UI files.

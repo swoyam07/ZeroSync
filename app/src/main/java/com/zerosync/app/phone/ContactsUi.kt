@@ -68,7 +68,14 @@ private val DeleteRed = Color(0xFFD32F2F)
 
 /** Contacts tab: private list, "+" to add. Tap = edit. */
 @Composable
-fun ContactsList(onOpen: (Contact) -> Unit, onSpam: () -> Unit, onCall: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ContactsList(
+    onOpen: (Contact) -> Unit,
+    onSpam: () -> Unit,
+    onCall: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    unreadMessages: Int = 0,
+    onMessages: () -> Unit = {},
+) {
     val context = LocalContext.current
     val contacts by produceState(emptyList<Contact>(), ContactsStore.version) {
         value = withContext(Dispatchers.IO) { ContactsStore.all(context) }
@@ -76,7 +83,14 @@ fun ContactsList(onOpen: (Contact) -> Unit, onSpam: () -> Unit, onCall: (String)
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Contacts", color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            // Spam list, left of the + (create) button.
+            // One row: Messages (with unread count) · Spam · + (create contact).
+            Box(Modifier.padding(end = 10.dp), contentAlignment = Alignment.TopEnd) {
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onMessages),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(ZsIcons.Message, contentDescription = "Messages", tint = Color.White, modifier = Modifier.size(22.dp)) }
+                if (unreadMessages > 0) com.zerosync.app.sms.UnreadBadge(unreadMessages)
+            }
             Text(
                 "Spam",
                 color = Color.White,
