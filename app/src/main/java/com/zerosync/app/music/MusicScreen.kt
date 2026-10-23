@@ -137,11 +137,12 @@ private fun Player(vm: MusicViewModel) {
     ) {
 
         // Big round cover with the time bar wrapped around it as a ring of bars (sound wave).
-        // Tapping the cover of a picked (not yet playing) song starts it.
+        // Tapping the cover pauses / resumes the song you HEAR, even while another song or folder
+        // is shown (browsing). The play button is what starts a picked song.
         Box(Modifier.fillMaxWidth(0.86f).aspectRatio(1f), contentAlignment = Alignment.Center) {
             // Ring first, cover on top, so taps on the cover reach the cover.
             WaveformRing(vm, seed = song.id, Modifier.fillMaxSize(), intro = intro.value)
-            Cover(song, Modifier.fillMaxSize(0.74f).clickable(enabled = vm.startPending, onClick = vm::playPause))
+            Cover(song, Modifier.fillMaxSize(0.74f).clickable(onClick = vm::pauseResumeCurrent))
         }
 
         // Numbers under the cover: elapsed | total.

@@ -34,7 +34,7 @@ Status: Alarm v0.1 implemented (`app/src/main/java/com/zerosync/app/alarm/`). No
   None / 1 day / 3 days / 1 week before.
 - Reminder: from N days before at 8:00 AM, a FIXED notification until the event day ends.
   Swiping it away re-posts it (Android 14+ lets users swipe "ongoing" ones). Lock screen shows
-  only "Event reminder" (title hidden). Done = finished: one-time → reminder + ring cancelled;
+  only "Event" + date/time (title hidden). Needs the phone's lock-screen notifications ON. Done = finished: one-time → reminder + ring cancelled;
   yearly → this year only, next year scheduled. Deleting the event removes everything.
 - At event time: rings like an alarm (AlarmService, same screens / swipe bar, snooze 5 min);
   on the lock screen the title is hidden ("Unlock to see the event"). Stop = finished.

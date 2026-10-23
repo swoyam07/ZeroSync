@@ -53,6 +53,19 @@ object CallManager {
         if (c != call) return
         state = c.details.state
         if (state == Call.STATE_ACTIVE && connectedAt == 0L) connectedAt = android.os.SystemClock.elapsedRealtime()
+        // Answered with "speaker": switch the sound to the speaker once the call is connected.
+        if (state == Call.STATE_ACTIVE && speakerOnAnswer) {
+            speakerOnAnswer = false
+            service?.setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+        }
+    }
+
+    private var speakerOnAnswer = false
+
+    /** Answer straight onto the loudspeaker. */
+    fun answerOnSpeaker() {
+        speakerOnAnswer = true
+        answer()
     }
 
     internal fun audioChanged(audio: CallAudioState) {

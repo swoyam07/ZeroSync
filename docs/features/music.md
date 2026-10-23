@@ -17,8 +17,8 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
 
 ## Round buttons (no hold)
 - Both music buttons open their menu as soon as you start swiping (no long-press wait).
-  A plain tap does nothing. Song button: up+circle = play, right+circle = pick, down = folder,
-  left = time scrub. Volume button: right = volume, left = sleep timer.
+  A plain tap does nothing. Song button (swapped 2026-10-23): UP = time scrub (a slim gray up/down
+  bar appears), LEFT + circle = change song + play, right + circle = pick, down = folder. Volume button: right = volume, left = sleep timer.
 
 ## Playback
 - No notification, no background service (user removed it 2026-10-18).

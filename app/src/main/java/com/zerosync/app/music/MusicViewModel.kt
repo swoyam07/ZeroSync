@@ -249,6 +249,14 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
         resumeAfterGallery = false
     }
 
+    /**
+     * Pause / resume the song that is actually PLAYING (the one you hear), even while the
+     * screen shows another song or folder you're browsing. Nothing is switched.
+     */
+    fun pauseResumeCurrent() {
+        if (player.isPlaying) player.pause() else player.play()
+    }
+
     fun playPause() {
         // A picked song or another folder is waiting: start it (replaces what plays now).
         if (startPending) return releaseSongWheel()

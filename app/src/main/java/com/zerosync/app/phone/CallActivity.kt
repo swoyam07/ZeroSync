@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -255,60 +256,65 @@ private fun IncomingCall() {
 /** Bar: Decline (left) · white phone handle (middle) · Answer (right). Drag handle to choose. */
 @Composable
 private fun AnswerBar(modifier: Modifier = Modifier) {
-    // Handle position. Past the edge it STAYS there (no jump back to the middle) and the
-    // call is answered / declined; the in-call screen then replaces it directly.
-    // Let go before the edge = it glides back to the middle.
-    val drag = remember { androidx.compose.animation.core.Animatable(0f) }
+    // Three ways: swipe UP = answer, LEFT = answer on speaker, RIGHT = decline.
+    // Past the edge the handle stays there and acts; let go early = glides back to the middle.
+    val dx = remember { androidx.compose.animation.core.Animatable(0f) }
+    val dy = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var done by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(84.dp)
-            .clip(RoundedCornerShape(50))
-            .background(ZsColors.Surface),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("Decline", color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
-        Text("Answer", color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("↑  Answer", color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 10.dp))
         Box(
-            Modifier
-                .offset { IntOffset(drag.value.roundToInt(), 0) }
-                .size(width = 96.dp, height = 68.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.White)
-                .pointerInput(Unit) {
-                    val limit = 80.dp.toPx()
-                    val edge = limit * 1.3f
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (done) return@detectHorizontalDragGestures
-                            scope.launch {
-                                when {
-                                    drag.value >= limit -> {
-                                        done = true
-                                        drag.animateTo(edge, androidx.compose.animation.core.tween(90))
-                                        CallManager.answer()
-                                    }
-                                    drag.value <= -limit -> {
-                                        done = true
-                                        drag.animateTo(-edge, androidx.compose.animation.core.tween(90))
-                                        CallManager.decline()
-                                    }
-                                    else -> drag.animateTo(0f, androidx.compose.animation.core.tween(180))
-                                }
-                            }
-                        },
-                        onDragCancel = { if (!done) scope.launch { drag.animateTo(0f, androidx.compose.animation.core.tween(180)) } },
-                    ) { change, dx ->
-                        if (done) return@detectHorizontalDragGestures
-                        change.consume()
-                        scope.launch { drag.snapTo((drag.value + dx).coerceIn(-edge, edge)) }
-                    }
-                },
+            Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(50)).background(ZsColors.Surface),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(ZsIcons.Phone, contentDescription = "Drag right to answer, left to decline", tint = Color.Black, modifier = Modifier.size(28.dp))
+            Text("Speaker", color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
+            Text("Decline", color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+            Box(
+                Modifier
+                    .offset { IntOffset(dx.value.roundToInt(), dy.value.roundToInt()) }
+                    .size(width = 96.dp, height = 68.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .pointerInput(Unit) {
+                        val limit = 80.dp.toPx()
+                        val edge = limit * 1.3f
+                        detectDragGestures(
+                            onDragEnd = {
+                                if (done) return@detectDragGestures
+                                scope.launch {
+                                    when {
+                                        dy.value <= -limit -> { done = true; dy.animateTo(-edge, androidx.compose.animation.core.tween(90)); CallManager.answer() }
+                                        dx.value >= limit -> { done = true; dx.animateTo(edge, androidx.compose.animation.core.tween(90)); CallManager.decline() }
+                                        dx.value <= -limit -> { done = true; dx.animateTo(-edge, androidx.compose.animation.core.tween(90)); CallManager.answerOnSpeaker() }
+                                        else -> {
+                                            launch { dx.animateTo(0f, androidx.compose.animation.core.tween(180)) }
+                                            dy.animateTo(0f, androidx.compose.animation.core.tween(180))
+                                        }
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                if (!done) scope.launch {
+                                    launch { dx.animateTo(0f, androidx.compose.animation.core.tween(180)) }
+                                    dy.animateTo(0f, androidx.compose.animation.core.tween(180))
+                                }
+                            },
+                        ) { change, drag ->
+                            if (done) return@detectDragGestures
+                            change.consume()
+                            scope.launch {
+                                // Move along one direction at a time: sideways, or up only.
+                                val nx = (dx.value + drag.x).coerceIn(-edge, edge)
+                                val ny = (dy.value + drag.y).coerceIn(-edge, 0f)
+                                if (kotlin.math.abs(nx) >= kotlin.math.abs(ny)) { dx.snapTo(nx); dy.snapTo(0f) } else { dy.snapTo(ny); dx.snapTo(0f) }
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(ZsIcons.Phone, contentDescription = "Swipe up to answer, left for speaker, right to decline", tint = Color.Black, modifier = Modifier.size(28.dp))
+            }
         }
     }
 }

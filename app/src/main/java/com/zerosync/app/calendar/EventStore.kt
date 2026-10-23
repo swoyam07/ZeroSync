@@ -210,7 +210,7 @@ object EventScheduler {
     /**
      * The fixed reminder. Can't be cleared: Android lets people swipe "ongoing" notifications
      * away now, so a swipe simply puts it back. Only Done (or deleting the event) removes it.
-     * Lock screen shows just "Event reminder" (title hidden until unlocked).
+     * Lock screen shows just "Event" + date/time (title hidden until unlocked).
      */
     fun showReminder(context: Context, e: Event, occ: Long) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -221,9 +221,11 @@ object EventScheduler {
             context, code, Intent(context, EventReminderReceiver::class.java).setAction(act).putExtra("id", e.id),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // Lock screen: only a general word + when, e.g. "Event · Fri 24 Oct · 3:00 PM" (no title).
         val publicVersion = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Event reminder")
+            .setContentTitle("Event")
+            .setContentText(whenText)
             .build()
         nm.notify(
             notifId(e.id),

@@ -92,12 +92,13 @@ fun JoystickButton(
     val currentOnLeftRelease by rememberUpdatedState(onLeftRelease)
     var mode by remember { mutableStateOf(Mode.Idle) }
     val pop = rememberMenuPop(mode == Mode.Menu)
-    // Same order as FourParts: up = play a song, right = pick a song, down = folder, left = time.
+    // Same order as FourParts (screen positions): up = time, right = pick a song,
+    // down = folder, left = change song + play.
     val menuIcons = listOf(
-        rememberVectorPainter(ZsIcons.Play),
+        rememberVectorPainter(ZsIcons.Clock),
         rememberVectorPainter(ZsIcons.Music),
         rememberVectorPainter(ZsIcons.Folder),
-        rememberVectorPainter(ZsIcons.Clock),
+        rememberVectorPainter(ZsIcons.Play),
     )
     var markerDegrees by remember { mutableFloatStateOf(0f) }
 
@@ -138,10 +139,17 @@ fun JoystickButton(
                         when (mode) {
                             Mode.Menu -> {
                                 if (d.getDistance() < innerRadius) continue
-                                val part = if (abs(d.x) > abs(d.y)) {
+                                val swiped = if (abs(d.x) > abs(d.y)) {
                                     if (d.x > 0) SwipeDirection.Right else SwipeDirection.Left
                                 } else {
                                     if (d.y > 0) SwipeDirection.Down else SwipeDirection.Up
+                                }
+                                // User's layout: swipe UP = move the time, swipe LEFT = change song + play.
+                                // (Inside, "Up" still means the play dial and "Left" the time scrub.)
+                                val part = when (swiped) {
+                                    SwipeDirection.Up -> SwipeDirection.Left
+                                    SwipeDirection.Left -> SwipeDirection.Up
+                                    else -> swiped
                                 }
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 if (part == SwipeDirection.Up || part == SwipeDirection.Right) {
@@ -228,8 +236,22 @@ fun JoystickButton(
                 val m = (markerDegrees - 90f) * PI.toFloat() / 180f
                 drawCircle(ZsColors.Primary, radius = 8.dp.toPx(), center = center + Offset(cos(m), sin(m)) * (bigRadius - 24.dp.toPx()))
             }
+            // Time scrub (after swiping up): a slim gray up/down bar through the button, so it's
+            // clear the finger now moves up and down. Only shown in this mode, not by default.
+            Mode.Seek -> {
+                val half = radius * 3.2f
+                val w = radius * 0.45f // slim bar
+                drawRoundRect(
+                    Color(0xFF3A3A3A),
+                    topLeft = Offset(center.x - w / 2, center.y - half),
+                    size = androidx.compose.ui.geometry.Size(w, half * 2),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2),
+                )
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
+                drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+            }
             // Picker: the folder boxes are drawn by the screen; the button stays plain.
-            Mode.Idle, Mode.Picker, Mode.Seek -> {
+            Mode.Idle, Mode.Picker -> {
                 drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
             }
