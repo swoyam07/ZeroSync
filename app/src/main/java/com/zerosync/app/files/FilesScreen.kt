@@ -108,7 +108,7 @@ fun FilesScreen(vm: FilesViewModel) {
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 12.dp, end = RailWidth)) {
-        val shown = vm.docs.filter { it.kind == vm.kind }
+        val shown = if (vm.kind == DocKind.All) vm.allFiles else vm.docs.filter { it.kind == vm.kind }
         if (shown.isEmpty()) {
             Text(
                 if (vm.loading) "Looking for files…" else "No ${vm.kind.label} files found",
@@ -173,6 +173,7 @@ fun FilesScreen(vm: FilesViewModel) {
 private val RailWidth = 64.dp
 
 private fun DocKind.icon() = when (this) {
+    DocKind.All -> ZsIcons.Folder
     DocKind.Pdf -> ZsIcons.Pdf
     DocKind.Word -> ZsIcons.Doc
     DocKind.Ppt -> ZsIcons.Slides
@@ -205,6 +206,17 @@ private fun KindRail(selected: DocKind, onSelect: (DocKind) -> Unit, modifier: M
             ) {
                 Icon(k.icon(), contentDescription = k.label, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(22.dp))
             }
+        }
+        // Thin line, then the Timer icon (placeholder: does nothing yet).
+        Box(Modifier.padding(vertical = 2.dp).size(width = 26.dp, height = 1.dp).background(ZsColors.Secondary).align(Alignment.CenterHorizontally))
+        // Opens the Time screen (Calendar · Timer · Alarm).
+        val context = androidx.compose.ui.platform.LocalContext.current
+        Box(
+            Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
+                .clickable { context.startActivity(android.content.Intent(context, com.zerosync.app.alarm.TimeActivity::class.java)) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(ZsIcons.Clock, contentDescription = "Timer, alarm, calendar", tint = Color.White, modifier = Modifier.size(22.dp))
         }
     }
 }

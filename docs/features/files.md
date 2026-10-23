@@ -15,6 +15,13 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/files/`). 
 - Delete (all tabs), two steps: hold an item → "Delete this file?" → red Delete. Removes the file
   from the phone (MediaStore delete, allowed by All files access).
 
+## All files + Timer (2026-10-23)
+- Rail starts with "All files" (folder icon): every file on the phone (no folders), A–Z by
+  name, same rows (type tag · name · size · date), up to 20 000. Known types open in their
+  viewer; others say "No preview". Hold = delete, as everywhere.
+- Rail ends (after a thin line) with a Timer/clock icon: placeholder, does nothing yet.
+  Planned there: stopwatch, alarm, private calendar (not in the main nav, user choice).
+
 ## Viewers (full screen, nav hidden; back arrow + name top-left; system back works)
 - PDF: built-in `PdfRenderer`, exact pages, scroll down; two-finger pinch zoom 1–4x.
 - Word .docx: own zip+XML reader: headings, bold/italic, bullets, pictures, simple tables.

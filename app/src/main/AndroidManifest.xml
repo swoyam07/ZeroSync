@@ -43,6 +43,13 @@
     <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
+    <!-- Alarms (user-approved): exact alarm-clock times, re-set after restart, ring in a short
+         foreground service while sounding. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+
     <!-- Offline by design: strip network permissions even if a library adds them.
          Without INTERNET, Android blocks every network socket for this app. -->
     <uses-permission
@@ -188,6 +195,39 @@
                 <data android:scheme="mmsto" />
             </intent-filter>
         </service>
+
+        <!-- Alarms: Time screen, full-screen ringing screen, ringing service, restart re-scheduler.
+             None exported (system boot broadcasts still reach the receiver). -->
+        <activity
+            android:name=".alarm.TimeActivity"
+            android:exported="false"
+            android:taskAffinity=".time" />
+        <activity
+            android:name=".alarm.AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity=".alarmring"
+            android:turnScreenOn="true" />
+        <service
+            android:name=".alarm.AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
+        <!-- Calendar: shows the fixed event reminder and handles its Done button (not exported). -->
+        <receiver
+            android:name=".calendar.EventReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".alarm.AlarmBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Android's call bridge; only the system can bind it (BIND_INCALL_SERVICE). -->
         <service

@@ -37,7 +37,7 @@ data class Contact(
  * AES-256-GCM with a key kept in the phone's secure hardware (Android Keystore).
  * The key never leaves the chip and only ZeroSync can use it, so copied files are just noise.
  */
-private object Vault {
+internal object Vault {
     private const val ALIAS = "zerosync_contacts"
     private const val IV_SIZE = 12
 

@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class DocKind(val label: String, val exts: List<String>) {
+    /** Every file on the phone, any type, A–Z. */
+    All("All files", emptyList()),
     Pdf("PDF", listOf("pdf")),
     Word("Word", listOf("docx", "doc")),
     Ppt("PPT", listOf("pptx", "ppt")),
@@ -27,7 +29,7 @@ enum class DocKind(val label: String, val exts: List<String>) {
 data class DocFile(val uri: Uri, val name: String, val size: Long, val modified: Long, val kind: DocKind) {
     val ext: String get() = name.substringAfterLast('.', "").lowercase()
     /** Old binary Office formats (.doc/.ppt/.xls) can't be read without a big library. */
-    val canPreview: Boolean get() = ext !in setOf("doc", "ppt", "xls")
+    val canPreview: Boolean get() = kind != DocKind.All && ext !in setOf("doc", "ppt", "xls")
 }
 
 /** What the viewer shows for the opened file. */
@@ -67,8 +69,44 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         loading = true
         viewModelScope.launch {
             docs = withContext(Dispatchers.IO) { query() }
+            allFiles = withContext(Dispatchers.IO) { runCatching { queryAll() }.getOrDefault(emptyList()) }
             loading = false
         }
+    }
+
+    /** "All files": every file on the phone (no folders), sorted A–Z by name. */
+    var allFiles by mutableStateOf(emptyList<DocFile>())
+        private set
+
+    private fun queryAll(): List<DocFile> {
+        val byExt = DocKind.entries.flatMap { k -> k.exts.map { it to k } }.toMap()
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+        )
+        val out = ArrayList<DocFile>()
+        resolver.query(
+            collection, projection,
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL", // folders have no type
+            null,
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} COLLATE NOCASE ASC",
+        )?.use { c ->
+            while (c.moveToNext() && out.size < 20000) {
+                val name = c.getString(1) ?: continue
+                // Known types open in their viewer; anything else is listed only.
+                val kind = byExt[name.substringAfterLast('.', "").lowercase()] ?: DocKind.All
+                val base = when (kind) {
+                    DocKind.Images -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    DocKind.Videos -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    else -> collection
+                }
+                out.add(DocFile(ContentUris.withAppendedId(base, c.getLong(0)), name, c.getLong(2), c.getLong(3) * 1000, kind))
+            }
+        }
+        return out
     }
 
     private fun query(): List<DocFile> {
@@ -125,6 +163,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun read(doc: DocFile): DocContent {
+        if (doc.kind == DocKind.All) return DocContent.Failed("No preview for .${doc.ext} files. ZeroSync only lists them.")
         if (!doc.canPreview) {
             return DocContent.Failed("Old .${doc.ext} format can't be previewed. Save it as .${doc.ext}x to view it.")
         }
@@ -158,9 +197,32 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     /** Delete a file from the phone (allowed by "All files access"). */
     fun delete(doc: DocFile) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) { runCatching { resolver.delete(doc.uri, null, null) > 0 }.getOrDefault(false) }
-            if (ok) docs = docs - doc
+            val ok = withContext(Dispatchers.IO) { deleteFile(doc) }
+            if (ok) {
+                // Remove it from every list (same file can be in "All files" and its type tab).
+                val id = doc.uri.lastPathSegment
+                docs = docs.filter { it.uri.lastPathSegment != id }
+                allFiles = allFiles.filter { it.uri.lastPathSegment != id }
+            }
         }
+    }
+
+    /**
+     * Delete through Android's media list; if that refuses (common for non-media files like
+     * .zip/.apk), delete the real file by its path ("All files access" allows this) and then
+     * remove its entry from the list.
+     */
+    private fun deleteFile(doc: DocFile): Boolean {
+        if (runCatching { resolver.delete(doc.uri, null, null) > 0 }.getOrDefault(false)) return true
+        val path = runCatching {
+            resolver.query(doc.uri, arrayOf(MediaStore.Files.FileColumns.DATA), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull() ?: return false
+        val file = java.io.File(path)
+        if (!file.exists() || !file.delete()) return false
+        runCatching { resolver.delete(doc.uri, null, null) } // drop the stale entry
+        return true
     }
 
     fun close() {

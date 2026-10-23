@@ -23,13 +23,13 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
   Exception: Camera's per-file Public switch copies a file to shared storage (user-approved).
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
-- No animations by default. Approved exceptions: 120 ms pop-in of the music hold menu; 1.2 s count-up of the music time ring on open (display only); call answer-bar handle glide (≤180 ms). No background work, services, or polling unless approved.
+- No animations by default. Approved exceptions: 120 ms pop-in of the music hold menu; 1.2 s count-up of the music time ring on open (display only); call answer-bar handle glide (≤180 ms). No background work, services, or polling unless approved (approved: alarm scheduling + boot re-schedule + ringing service, see docs/features/alarm.md).
 - Prefer Android/Jetpack built-ins over third-party packages.
 - Adaptive layouts only; never hardcode screen pixel sizes.
 - Handle backgrounding, process death, config changes, low memory.
 
 ## Where things live (read only what the task needs)
-- Feature specs: `docs/features/<feature>.md` (phone, contacts, gallery, music, files, camera, messages)
+- Feature specs: `docs/features/<feature>.md` (phone, contacts, gallery, music, files, camera, messages, alarm)
 - Architecture & navigation: `docs/architecture.md`
 - Open questions / decisions log: `docs/decisions.md`
 - Theme/UI rules auto-load from `.claude/rules/` when editing UI files.
