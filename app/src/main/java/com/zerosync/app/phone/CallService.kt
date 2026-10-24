@@ -33,6 +33,7 @@ class CallService : InCallService() {
             if (state != Call.STATE_RINGING) {
                 CallOverlay.hide(this@CallService)
                 CallVibration.stop(this@CallService) // answered / declined
+                CallRinger.stop()
             }
         }
     }
@@ -49,6 +50,7 @@ class CallService : InCallService() {
         // Any error while showing the ringing UI falls back to the full call screen, never a crash.
         if (call.details.state == Call.STATE_RINGING) {
             CallVibration.start(this) // always vibrate while ringing
+            CallRinger.start(this, call.details.handle?.schemeSpecificPart.orEmpty()) // category ringtone
             runCatching { showIncoming() }.onFailure { CallOverlay.hide(this); openCallScreen() }
         } else {
             openCallScreen()
@@ -65,6 +67,7 @@ class CallService : InCallService() {
         call.unregisterCallback(overlayWatcher)
         CallOverlay.hide(this)
         CallVibration.stop(this)
+        CallRinger.stop()
         CallManager.removed(call)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }

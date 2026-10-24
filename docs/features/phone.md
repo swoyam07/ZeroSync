@@ -58,9 +58,14 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   Pack *123#, Credit *9988#. Tap = dialed from that network's SIM (system shows the reply).
 - Vibration (`CallVibration.kt`): every ringing call vibrates (800 ms on / 700 ms off) whether the
   screen is on/off or locked/unlocked, even if the phone's "vibrate when ringing" is off. Stops on
-  answer / decline / end. Ringtone itself stays with the system (Settings → Sound → Ringtone, per SIM).
+  answer / decline / end. Ringtone: see Ringtones below.
 - Incoming full screen (locked): two-way swipe — RIGHT = answer, LEFT = decline. A round speaker
   button above the bar (off by default): if on, answering goes straight to the loudspeaker.
+- Ringtones (`Ringtones.kt`, 2026-10-24): ZeroSync plays the ringtone itself
+  (IN_CALL_SERVICE_RINGING). ♪ button next to NTC / Ncell on the Keypad → Friends / Family / Work,
+  each "Default ringtone" or a song from Music. Saved contact = their number's category ringtone;
+  unknown numbers = phone default. No sound in silent / vibrate mode or Do Not Disturb (still
+  vibrates). Unreadable song falls back to the phone default. Spam never rings.
 
 ## Permissions
 CALL_PHONE, VIBRATE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock

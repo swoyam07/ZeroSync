@@ -97,6 +97,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     var favOpen by remember { mutableStateOf(false) }
     // Network whose quick codes are shown (null = closed).
     var codesFor by remember { mutableStateOf<Carrier?>(null) }
+    var ringtonesOpen by remember { mutableStateOf(false) }
     // Number waiting for "SIM 1 or SIM 2?" (null = no pop-up).
     var askSimFor by remember { mutableStateOf<String?>(null) }
     // Call through [sim]; no SIM chosen + two SIMs (e.g. a landline) = small pop-up asks first.
@@ -140,6 +141,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
             else dial(code, sims.firstOrNull { it.carrier == c })
         }, onDismiss = { codesFor = null })
     }
+    if (ringtonesOpen) RingtonesDialog(onDismiss = { ringtonesOpen = false })
     askSimFor?.let { n -> SimChoiceDialog(n, sims, onPick = { sim -> askSimFor = null; placeCall(context, n, sim) }, onDismiss = { askSimFor = null }) }
     if (favOpen) {
         Box(Modifier.fillMaxSize().background(Color.Black).statusBarsPadding().padding(bottom = bottomPadding)) {
@@ -218,6 +220,10 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NetworkButton(Carrier.Ntc, { codesFor = Carrier.Ntc })
                     NetworkButton(Carrier.Ncell, { codesFor = Carrier.Ncell })
+                    // Ringtones per contact category (Friends / Family / Work).
+                    Text("♪", color = Color.White, style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface)
+                            .clickable { ringtonesOpen = true }.padding(horizontal = 14.dp, vertical = 5.dp))
                 }
             }
             Box(contentAlignment = Alignment.TopEnd) {
