@@ -32,7 +32,18 @@ object CallManager {
         override fun onStateChanged(c: Call, newState: Int) = update(c)
     }
 
+    /**
+     * Set the moment you swipe, before the network confirms: the screen switches right away
+     * (in-call screen on answer, closes on decline) instead of waiting ~1 s.
+     */
+    var answering by mutableStateOf(false)
+        private set
+    var declining by mutableStateOf(false)
+        private set
+
     internal fun added(c: Call) {
+        answering = false
+        declining = false
         call?.unregisterCallback(callback)
         call = c
         c.registerCallback(callback)
@@ -80,8 +91,8 @@ object CallManager {
     /** Two SIMs: the user picked which SIM to call from. */
     fun chooseSim(handle: android.telecom.PhoneAccountHandle) = call?.phoneAccountSelected(handle, false)
 
-    fun answer() = call?.answer(VideoProfile.STATE_AUDIO_ONLY)
-    fun decline() = call?.reject(false, null)
+    fun answer() { answering = true; call?.answer(VideoProfile.STATE_AUDIO_ONLY) }
+    fun decline() { declining = true; call?.reject(false, null) }
     fun declineWithMessage(text: String) = call?.reject(true, text)
     fun hangUp() = call?.disconnect()
     fun toggleHold() = call?.let { if (state == Call.STATE_HOLDING) it.unhold() else it.hold() }

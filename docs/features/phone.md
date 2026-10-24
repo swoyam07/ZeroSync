@@ -59,8 +59,8 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
 - Vibration (`CallVibration.kt`): every ringing call vibrates (800 ms on / 700 ms off) whether the
   screen is on/off or locked/unlocked, even if the phone's "vibrate when ringing" is off. Stops on
   answer / decline / end. Ringtone itself stays with the system (Settings → Sound → Ringtone, per SIM).
-- Incoming full screen (locked): drag the white handle UP = answer, LEFT = answer on speaker,
-  RIGHT = decline ("↑ Answer" label above the bar, "Speaker" / "Decline" inside it).
+- Incoming full screen (locked): two-way swipe — RIGHT = answer, LEFT = decline. A round speaker
+  button above the bar (off by default): if on, answering goes straight to the loudspeaker.
 
 ## Permissions
 CALL_PHONE, VIBRATE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock

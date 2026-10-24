@@ -89,14 +89,16 @@ class CallActivity : ComponentActivity() {
             ZeroSyncTheme {
                 val call = CallManager.call
                 val state = CallManager.state
-                LaunchedEffect(call, state) {
+                LaunchedEffect(call, state, CallManager.declining) {
                     if (call == null || state == Call.STATE_DISCONNECTED) finish()
+                    if (CallManager.declining) finish() // close at once on decline
                     // Answered or declined: the incoming-call banner is no longer needed.
                     if (state != Call.STATE_RINGING) getSystemService(NotificationManager::class.java).cancelAll()
                 }
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     when (state) {
-                        Call.STATE_RINGING -> IncomingCall()
+                        // Answered by swipe: show the in-call screen at once ("Calling…" until connected).
+                        Call.STATE_RINGING -> if (CallManager.answering) InCall() else IncomingCall()
                         Call.STATE_SELECT_PHONE_ACCOUNT -> SimPicker()
                         else -> InCall()
                     }
@@ -256,64 +258,71 @@ private fun IncomingCall() {
 /** Bar: Decline (left) · white phone handle (middle) · Answer (right). Drag handle to choose. */
 @Composable
 private fun AnswerBar(modifier: Modifier = Modifier) {
-    // Three ways: swipe UP = answer, LEFT = answer on speaker, RIGHT = decline.
-    // Past the edge the handle stays there and acts; let go early = glides back to the middle.
-    val dx = remember { androidx.compose.animation.core.Animatable(0f) }
-    val dy = remember { androidx.compose.animation.core.Animatable(0f) }
+    // Two ways only: swipe RIGHT = answer, LEFT = decline.
+    // Speaker button above (off by default): when on, answering goes straight to the speaker.
+    val drag = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var done by remember { mutableStateOf(false) }
+    var speakerOn by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("↑  Answer", color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 10.dp))
+        Box(
+            Modifier
+                .padding(bottom = 14.dp)
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(if (speakerOn) Color.White else ZsColors.Surface)
+                .border(1.dp, ZsColors.Secondary, CircleShape)
+                .clickable { speakerOn = !speakerOn },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(ZsIcons.Volume, contentDescription = if (speakerOn) "Speaker on" else "Speaker off",
+                tint = if (speakerOn) Color.Black else Color.White, modifier = Modifier.size(24.dp))
+        }
         Box(
             Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(50)).background(ZsColors.Surface),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Speaker", color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
-            Text("Decline", color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+            Text("Decline", color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
+            Text("Answer", color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
             Box(
                 Modifier
-                    .offset { IntOffset(dx.value.roundToInt(), dy.value.roundToInt()) }
+                    .offset { IntOffset(drag.value.roundToInt(), 0) }
                     .size(width = 96.dp, height = 68.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color.White)
                     .pointerInput(Unit) {
                         val limit = 80.dp.toPx()
                         val edge = limit * 1.3f
-                        detectDragGestures(
+                        detectHorizontalDragGestures(
                             onDragEnd = {
-                                if (done) return@detectDragGestures
+                                if (done) return@detectHorizontalDragGestures
                                 scope.launch {
                                     when {
-                                        dy.value <= -limit -> { done = true; dy.animateTo(-edge, androidx.compose.animation.core.tween(90)); CallManager.answer() }
-                                        dx.value >= limit -> { done = true; dx.animateTo(edge, androidx.compose.animation.core.tween(90)); CallManager.decline() }
-                                        dx.value <= -limit -> { done = true; dx.animateTo(-edge, androidx.compose.animation.core.tween(90)); CallManager.answerOnSpeaker() }
-                                        else -> {
-                                            launch { dx.animateTo(0f, androidx.compose.animation.core.tween(180)) }
-                                            dy.animateTo(0f, androidx.compose.animation.core.tween(180))
+                                        // Act the instant the finger lifts (no waiting for the slide).
+                                        drag.value >= limit -> {
+                                            done = true
+                                            if (speakerOn) CallManager.answerOnSpeaker() else CallManager.answer()
+                                            drag.snapTo(edge)
                                         }
+                                        drag.value <= -limit -> {
+                                            done = true
+                                            CallManager.decline()
+                                            drag.snapTo(-edge)
+                                        }
+                                        else -> drag.animateTo(0f, androidx.compose.animation.core.tween(180))
                                     }
                                 }
                             },
-                            onDragCancel = {
-                                if (!done) scope.launch {
-                                    launch { dx.animateTo(0f, androidx.compose.animation.core.tween(180)) }
-                                    dy.animateTo(0f, androidx.compose.animation.core.tween(180))
-                                }
-                            },
-                        ) { change, drag ->
-                            if (done) return@detectDragGestures
+                            onDragCancel = { if (!done) scope.launch { drag.animateTo(0f, androidx.compose.animation.core.tween(180)) } },
+                        ) { change, dx ->
+                            if (done) return@detectHorizontalDragGestures
                             change.consume()
-                            scope.launch {
-                                // Move along one direction at a time: sideways, or up only.
-                                val nx = (dx.value + drag.x).coerceIn(-edge, edge)
-                                val ny = (dy.value + drag.y).coerceIn(-edge, 0f)
-                                if (kotlin.math.abs(nx) >= kotlin.math.abs(ny)) { dx.snapTo(nx); dy.snapTo(0f) } else { dy.snapTo(ny); dx.snapTo(0f) }
-                            }
+                            scope.launch { drag.snapTo((drag.value + dx).coerceIn(-edge, edge)) }
                         }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(ZsIcons.Phone, contentDescription = "Swipe up to answer, left for speaker, right to decline", tint = Color.Black, modifier = Modifier.size(28.dp))
+                Icon(ZsIcons.Phone, contentDescription = "Swipe right to answer, left to decline", tint = Color.Black, modifier = Modifier.size(28.dp))
             }
         }
     }
