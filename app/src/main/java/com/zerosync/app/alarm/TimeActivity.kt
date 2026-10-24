@@ -248,6 +248,8 @@ private fun AlarmEditor(start: Alarm, onDone: () -> Unit) {
     val time = rememberTimePickerState(start.hour, start.minute, is24Hour = false)
     var days by remember { mutableStateOf(start.days) }
     var sound by remember { mutableStateOf(start.soundUri to start.soundName) }
+    var phraseOn by remember { mutableStateOf(start.stopPhrase.isNotBlank()) }
+    var phrase by remember { mutableStateOf(start.stopPhrase) }
     var pickSound by remember { mutableStateOf(false) }
     BackHandler(onBack = onDone)
 
@@ -288,13 +290,46 @@ private fun AlarmEditor(start: Alarm, onDone: () -> Unit) {
             Text(sound.second, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
+        // Optional: type a text to stop (swipe can only snooze).
+        Row(
+            Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(ZsColors.Surface)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Type to stop", color = Color.White)
+                Text("Swipe only snoozes; typing the text stops it", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
+            }
+            Switch(
+                checked = phraseOn,
+                onCheckedChange = { phraseOn = it },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black, checkedTrackColor = Color.White,
+                    uncheckedThumbColor = ZsColors.Secondary, uncheckedTrackColor = Color.Black, uncheckedBorderColor = ZsColors.Secondary,
+                ),
+            )
+        }
+        if (phraseOn) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = phrase,
+                onValueChange = { phrase = it },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+                modifier = Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(ZsColors.Surface).padding(16.dp),
+                decorationBox = { inner -> Box { if (phrase.isEmpty()) Text("Text to type, e.g. I am awake", color = ZsColors.Secondary); inner() } },
+            )
+        }
+
         Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TextButton(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Cancel", color = ZsColors.Secondary) }
             Button(
                 onClick = {
-                    AlarmStore.save(context, start.copy(hour = time.hour, minute = time.minute, days = days, enabled = true, soundUri = sound.first, soundName = sound.second))
+                    AlarmStore.save(context, start.copy(hour = time.hour, minute = time.minute, days = days, enabled = true, soundUri = sound.first, soundName = sound.second, stopPhrase = if (phraseOn) phrase.trim() else ""))
                     onDone()
                 },
+                enabled = !phraseOn || phrase.isNotBlank(),
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
             ) { Text("Save") }

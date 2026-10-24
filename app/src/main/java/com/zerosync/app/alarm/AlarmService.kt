@@ -103,7 +103,8 @@ class AlarmService : Service() {
             .setOngoing(true)
             .setContentIntent(full)
             .addAction(Notification.Action.Builder(null, if (alarm.id < 0) "Snooze" else "Snooze $SNOOZE_MINUTES min", action(ACTION_SNOOZE, 1)).build())
-            .addAction(Notification.Action.Builder(null, if (alarm.id < 0) "Complete" else "Stop", action(ACTION_STOP, 2)).build())
+            // Type-to-stop alarms get no Stop button here: only typing the text stops them.
+            .apply { if (alarm.stopPhrase.isBlank()) addAction(Notification.Action.Builder(null, if (alarm.id < 0) "Complete" else "Stop", action(ACTION_STOP, 2)).build()) }
             .apply { if (!unlocked || !AlarmOverlay.canShow(this@AlarmService)) setFullScreenIntent(full, true) }
             .build()
         runCatching {
@@ -113,7 +114,8 @@ class AlarmService : Service() {
         if (unlocked && AlarmOverlay.canShow(this)) AlarmOverlay.show(this, alarm)
         playSound(alarm)
         vibrate()
-        handler.postDelayed({ finish(snooze = false) }, AUTO_STOP_MS)
+        // After 10 min unanswered: stop, or snooze for type-to-stop alarms (they never stop by themselves).
+        handler.postDelayed({ finish(snooze = alarm.stopPhrase.isNotBlank()) }, AUTO_STOP_MS)
     }
 
     private fun action(act: String, code: Int) = PendingIntent.getService(

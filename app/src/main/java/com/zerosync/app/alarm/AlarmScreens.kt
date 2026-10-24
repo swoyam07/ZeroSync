@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -89,13 +90,23 @@ class AlarmActivity : ComponentActivity() {
                     val sub = if ((alarm?.id ?: 0) < 0 && locked) "Unlock to see the event" else alarm?.soundName ?: ""
                     Text(sub, color = ZsColors.Secondary, modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.weight(1f))
+                    // Type-to-stop: swiping right opens a box; the alarm stops only when the
+                    // saved text is typed exactly (keyboard works over the lock screen).
+                    val phrase = alarm?.stopPhrase.orEmpty()
+                    var typing by remember { mutableStateOf(false) }
+                    if (phrase.isNotBlank() && typing) TypeToStop(phrase, onMatch = { send(this@AlarmActivity, AlarmService.ACTION_STOP) })
                     SwipeBar(
                         onSnooze = { send(this@AlarmActivity, AlarmService.ACTION_SNOOZE) },
-                        onStop = { send(this@AlarmActivity, AlarmService.ACTION_STOP) },
+                        onStop = { if (phrase.isBlank()) send(this@AlarmActivity, AlarmService.ACTION_STOP) else typing = true },
+                        resetKey = typing,
                         modifier = Modifier.padding(bottom = 72.dp),
                         // Calendar events: "Snooze" / "Complete" (alarms keep "Snooze 5" / "Stop").
                         snoozeLabel = if ((alarm?.id ?: 0) < 0) "Snooze" else "Snooze $SNOOZE_MINUTES",
-                        stopLabel = if ((alarm?.id ?: 0) < 0) "Complete" else "Stop",
+                        stopLabel = when {
+                            (alarm?.id ?: 0) < 0 -> "Complete"
+                            phrase.isNotBlank() -> "Type to stop"
+                            else -> "Stop"
+                        },
                     )
                 }
             }
@@ -115,10 +126,11 @@ fun SwipeBar(
     compact: Boolean = false,
     snoozeLabel: String = "Snooze $SNOOZE_MINUTES",
     stopLabel: String = "Stop",
+    resetKey: Any? = null,
 ) {
-    val drag = remember { Animatable(0f) }
+    val drag = remember(resetKey) { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    var done by remember { mutableStateOf(false) }
+    var done by remember(resetKey) { mutableStateOf(false) }
     val barH = if (compact) 60.dp else 84.dp
     val handleW = if (compact) 76.dp else 96.dp
     Box(
@@ -159,6 +171,30 @@ fun SwipeBar(
     }
 }
 
+/** Box where the saved text must be typed exactly (case and outer spaces ignored) to stop. */
+@Composable
+private fun TypeToStop(phrase: String, onMatch: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Type to stop:", color = ZsColors.Secondary)
+        Text(phrase, color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 6.dp))
+        androidx.compose.foundation.text.BasicTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                if (it.trim().equals(phrase.trim(), ignoreCase = true)) onMatch()
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleMedium.copy(color = Color.White),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus).clip(RoundedCornerShape(16.dp))
+                .background(ZsColors.Surface).padding(horizontal = 16.dp, vertical = 14.dp),
+        )
+    }
+}
+
 /** Small alarm card over other apps while the phone is unlocked ("Display over other apps"). */
 object AlarmOverlay {
     private var view: ComposeView? = null
@@ -188,10 +224,14 @@ object AlarmOverlay {
                         }
                         SwipeBar(
                             onSnooze = { send(context, AlarmService.ACTION_SNOOZE) },
-                            onStop = { send(context, AlarmService.ACTION_STOP) },
+                            // Type-to-stop alarms: open the full screen to type the text there.
+                            onStop = {
+                                if (alarm.stopPhrase.isBlank()) send(context, AlarmService.ACTION_STOP)
+                                else context.startActivity(Intent(context, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            },
                             compact = true,
                             snoozeLabel = if (alarm.id < 0) "Snooze" else "Snooze $SNOOZE_MINUTES",
-                            stopLabel = if (alarm.id < 0) "Complete" else "Stop",
+                            stopLabel = if (alarm.id < 0) "Complete" else if (alarm.stopPhrase.isNotBlank()) "Type" else "Stop",
                         )
                     }
                 }

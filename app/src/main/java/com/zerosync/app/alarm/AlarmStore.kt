@@ -24,6 +24,8 @@ data class Alarm(
     val enabled: Boolean = true,
     val soundUri: String? = null,
     val soundName: String = "Default alarm",
+    /** Optional "type to stop" text. Not blank = the alarm only stops after typing it exactly. */
+    val stopPhrase: String = "",
 )
 
 /** 12-hour time like "6:05 PM" (never 18:05). */
@@ -53,6 +55,7 @@ object AlarmStore {
                 enabled = o.optBoolean("on", true),
                 soundUri = o.optString("uri").ifBlank { null },
                 soundName = o.optString("sound", "Default alarm"),
+                stopPhrase = o.optString("phrase"),
             )
         }.sortedWith(compareBy({ it.hour }, { it.minute }))
     }
@@ -65,7 +68,7 @@ object AlarmStore {
             arr.put(
                 JSONObject().put("id", a.id).put("h", a.hour).put("m", a.minute)
                     .put("days", JSONArray(a.days.sorted())).put("on", a.enabled)
-                    .put("uri", a.soundUri ?: "").put("sound", a.soundName),
+                    .put("uri", a.soundUri ?: "").put("sound", a.soundName).put("phrase", a.stopPhrase),
             )
         }
         prefs(context).edit { putString("list", arr.toString()) }

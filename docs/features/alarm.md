@@ -14,6 +14,11 @@ Status: Alarm v0.1 implemented (`app/src/main/java/com/zerosync/app/alarm/`). No
 - Repeat: 7 day checkboxes (S M T W T F S); none = once (turns itself off after ringing).
 - Sound: phone's default alarm tone, or any song from Music. Plays at ALARM volume (rings in
   silent mode), loops, vibrates; auto-stops after 10 min.
+- Type to stop (optional per alarm, 2026-10-24): set a text when saving. When it rings, the swipe
+  can only Snooze 5 min; swiping right ("Type to stop") opens a box on the ring screen (keyboard
+  works over the lock screen, no unlock needed). Typing the text exactly (case / outer spaces
+  ignored) stops it. The unlocked pop-up opens the full screen to type. No Stop button in the
+  notification; after 10 min unanswered it snoozes instead of stopping.
 - List: time, repeat + sound, on/off switch; tap = edit; hold = delete (confirm); + = new.
 - Permission cards (notifications, full-screen alerts, display over apps) shown ONLY in the
   Alarm tab, never elsewhere.
