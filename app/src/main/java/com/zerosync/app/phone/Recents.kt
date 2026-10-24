@@ -150,18 +150,8 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onCall: () -> U
                 Text(title, color = Color.White, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 // Spam tag, right of the name.
                 if (call.spam) {
-                    // Short red "S" badge; screen readers say "Spam".
-                    Text(
-                        "S",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .semantics { contentDescription = "Spam" }
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xFFD32F2F))
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                    )
+                    // Small red "!" spam badge.
+                    SpamBadge(16.dp, Modifier.padding(start = 8.dp))
                 }
             }
             // "Missed · 5 min" (+ the number when a name is shown above).

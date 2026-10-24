@@ -86,11 +86,11 @@ fun ContactsList(
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Contacts", color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            // One row: ★ Favorites · Messages (with unread count) · Spam · + (create contact).
+            // One row: ♪ Ringtones · Messages (with unread count) · Spam · + (create contact).
             Box(
-                Modifier.padding(end = 10.dp).size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onFavorites),
+                Modifier.padding(end = 10.dp).size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onFavorites), // opens ringtones (param name kept)
                 contentAlignment = Alignment.Center,
-            ) { Text("★", color = Color.White, fontSize = 20.sp) }
+            ) { Icon(ZsIcons.Music, contentDescription = "Ringtones", tint = Color.White, modifier = Modifier.size(22.dp)) } // same icon style as Messages
             Box(Modifier.padding(end = 10.dp), contentAlignment = Alignment.TopEnd) {
                 Box(
                     Modifier.size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onMessages),
@@ -98,16 +98,10 @@ fun ContactsList(
                 ) { Icon(ZsIcons.Message, contentDescription = "Messages", tint = Color.White, modifier = Modifier.size(22.dp)) }
                 if (unreadMessages > 0) com.zerosync.app.sms.UnreadBadge(unreadMessages)
             }
-            Text(
-                "Spam",
-                color = Color.White,
-                modifier = Modifier
-                    .padding(end = 10.dp)
-                    .clip(RoundedCornerShape(50))
-                    .border(1.dp, ZsColors.Secondary, RoundedCornerShape(50))
-                    .clickable(onClick = onSpam)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            )
+            // Spam list: red ⓘ-style badge (red circle, white "!").
+            Box(Modifier.padding(end = 10.dp).size(44.dp).clip(CircleShape).background(ZsColors.Surface).clickable(onClick = onSpam), contentAlignment = Alignment.Center) {
+                SpamBadge(24.dp)
+            }
             Box(
                 Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable { onOpen(Contact()) },
                 contentAlignment = Alignment.Center,

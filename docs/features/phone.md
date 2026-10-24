@@ -48,8 +48,8 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   if they have one (NTC→NTC, Ncell→Ncell, usually cheaper), else their first number. Green =
   same network (recommended); gray = different network, still allowed. Call forced through the
   chosen SIM via EXTRA_PHONE_ACCOUNT_HANDLE. One SIM: single call button as before.
-- Favorites (`Favorites.kt`, `FavCallButton.kt`): 4 slots ↑ → ↓ ← (private prefs). ★ in the
-  Contacts header opens them: pick a contact number or type one; ✕ clears. Keypad call button:
+- Favorites (`Favorites.kt`, `FavCallButton.kt`): 4 slots ↑ → ↓ ← (private prefs). ★ next to NTC / Ncell on the Keypad
+  opens them (moved from the Contacts header 2026-10-24): pick a contact number or type one; ✕ clears. Keypad call button:
   tap = call typed number; drag (no hold) = 4-way menu (pads show the favorite's initial / last 2
   digits, "+" if empty), drag onto one and release = call it from the same-network SIM. Empty
   slot opens the Favorites screen. Release in the middle = cancel.
@@ -62,7 +62,7 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
 - Incoming full screen (locked): two-way swipe — RIGHT = answer, LEFT = decline. A round speaker
   button above the bar (off by default): if on, answering goes straight to the loudspeaker.
 - Ringtones (`Ringtones.kt`, 2026-10-24): ZeroSync plays the ringtone itself
-  (IN_CALL_SERVICE_RINGING). ♪ button next to NTC / Ncell on the Keypad → Friends / Family / Work,
+  (IN_CALL_SERVICE_RINGING). ♪ button in the Contacts header → Friends / Family / Work,
   each "Default ringtone" or a song from Music. Saved contact = their number's category ringtone;
   unknown numbers = phone default. No sound in silent / vibrate mode or Do Not Disturb (still
   vibrates). Unreadable song falls back to the phone default. Spam never rings.

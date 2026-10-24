@@ -38,6 +38,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.zerosync.app.ui.ZsIcons
@@ -171,5 +175,20 @@ fun SpamListScreen(onDone: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Spam icon: red circle with a white "!" (screen readers say "Spam"). */
+@Composable
+fun SpamBadge(size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(size)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Color(0xFFE53935))
+            .semantics { contentDescription = "Spam" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("!", color = Color.White, fontSize = (size.value * 0.62f).sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
     }
 }

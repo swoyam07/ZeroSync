@@ -220,10 +220,10 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NetworkButton(Carrier.Ntc, { codesFor = Carrier.Ntc })
                     NetworkButton(Carrier.Ncell, { codesFor = Carrier.Ncell })
-                    // Ringtones per contact category (Friends / Family / Work).
-                    Text("♪", color = Color.White, style = MaterialTheme.typography.titleMedium,
+                    // Favorites (↑ → ↓ ← spots for the call button drag).
+                    Text("★", color = Color.White, style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface)
-                            .clickable { ringtonesOpen = true }.padding(horizontal = 14.dp, vertical = 5.dp))
+                            .clickable { favOpen = true }.padding(horizontal = 14.dp, vertical = 5.dp))
                 }
             }
             Box(contentAlignment = Alignment.TopEnd) {
@@ -350,7 +350,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
             PhoneTab.Contacts -> ContactsList(
                 onOpen = { editing = it },
                 onSpam = { spamOpen = true },
-                onFavorites = { favOpen = true },
+                onFavorites = { ringtonesOpen = true }, // ♪ in the Contacts header
                 sims = sims,
                 onCallWith = { n, sim ->
                     if (hasCallPermission(context)) dial(n, sim)
