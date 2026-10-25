@@ -90,7 +90,58 @@ fun FilesScreen(vm: FilesViewModel) {
 
     // Delete, two steps: hold an item -> confirm box -> red Delete removes the file from the phone.
     var toDelete by remember { mutableStateOf<DocFile?>(null) }
+    // Hold a file: PDFs → Add to Books / Delete; Books → Remove from Books (file stays);
+    // anything else → Delete.
+    var options by remember { mutableStateOf<DocFile?>(null) }
+    options?.let { doc ->
+        when (doc.kind) {
+            DocKind.Books -> AlertDialog(
+                onDismissRequest = { options = null },
+                containerColor = ZsColors.Surface,
+                title = { Text("Remove from Books?", color = Color.White) },
+                text = { Text("${doc.name}\nThe PDF itself stays on the phone.", color = ZsColors.OnSurface) },
+                confirmButton = { Button(onClick = { Books.remove(context, doc.uri); options = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("Remove") } },
+                dismissButton = { TextButton(onClick = { options = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+            )
+            DocKind.Pdf -> AlertDialog(
+                onDismissRequest = { options = null },
+                containerColor = ZsColors.Surface,
+                title = { Text(doc.name, color = Color.White, maxLines = 2) },
+                text = {
+                    Column {
+                        val inBooks = remember(Books.version) { Books.contains(context, doc.uri) }
+                        Text(if (inBooks) "✓  In Books" else "+  Add to Books", color = Color.White,
+                            modifier = Modifier.fillMaxWidth().clickable(enabled = !inBooks) { Books.add(context, doc); options = null }.padding(vertical = 12.dp))
+                        Text("Delete file", color = DeleteRed,
+                            modifier = Modifier.fillMaxWidth().clickable { toDelete = doc; options = null }.padding(vertical = 12.dp))
+                    }
+                },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { options = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+            )
+            else -> { toDelete = doc; options = null }
+        }
+    }
     toDelete?.let { doc ->
+        // A PDF tagged as a book must be removed from Books first; only then can it be deleted.
+        val inBooks = remember(Books.version, doc) { Books.all(context).any { it.uri.lastPathSegment == doc.uri.lastPathSegment } }
+        if (inBooks) {
+            AlertDialog(
+                onDismissRequest = { toDelete = null },
+                containerColor = ZsColors.Surface,
+                title = { Text("This PDF is in Books", color = Color.White) },
+                text = { Text("${doc.name}\nRemove it from Books first, then you can delete it.", color = ZsColors.OnSurface) },
+                confirmButton = {
+                    Button(
+                        onClick = { Books.all(context).filter { it.uri.lastPathSegment == doc.uri.lastPathSegment }.forEach { Books.remove(context, it.uri) } },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    ) { Text("Remove from Books") }
+                },
+                dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+            )
+            return@let
+        }
         AlertDialog(
             onDismissRequest = { toDelete = null },
             containerColor = ZsColors.Surface,
@@ -108,7 +159,12 @@ fun FilesScreen(vm: FilesViewModel) {
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 12.dp, end = RailWidth)) {
-        val shown = if (vm.kind == DocKind.All) vm.allFiles else vm.docs.filter { it.kind == vm.kind }
+        val books = remember(Books.version) { Books.all(context) }
+        val shown = when (vm.kind) {
+            DocKind.All -> vm.allFiles
+            DocKind.Books -> books
+            else -> vm.docs.filter { it.kind == vm.kind }
+        }
         if (shown.isEmpty()) {
             Text(
                 if (vm.loading) "Looking for files…" else "No ${vm.kind.label} files found",
@@ -133,7 +189,7 @@ fun FilesScreen(vm: FilesViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
             ) {
                 gridItems(shown, key = { it.uri.toString() }) { doc ->
-                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { toDelete = doc })) {
+                    Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { options = doc })) {
                         Thumbnail(doc.uri, Modifier.fillMaxSize(), sizePx = 360)
                         if (doc.kind == DocKind.Videos) {
                             Icon(
@@ -158,7 +214,7 @@ fun FilesScreen(vm: FilesViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = NavClearance),
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
         ) {
-            items(shown, key = { it.uri.toString() }) { doc -> FileRow(doc, onLongClick = { toDelete = doc }) { vm.open(doc) } }
+            items(shown, key = { it.uri.toString() }) { doc -> FileRow(doc, onLongClick = { options = doc }) { vm.open(doc) } }
         }
     }
     // Type picker: icon column at the bottom-right corner, in reach of the right thumb.
@@ -175,6 +231,7 @@ private val RailWidth = 64.dp
 private fun DocKind.icon() = when (this) {
     DocKind.All -> ZsIcons.Folder
     DocKind.Pdf -> ZsIcons.Pdf
+    DocKind.Books -> ZsIcons.Book
     DocKind.Word -> ZsIcons.Doc
     DocKind.Ppt -> ZsIcons.Slides
     DocKind.Excel -> ZsIcons.Sheet

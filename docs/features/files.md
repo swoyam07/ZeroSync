@@ -22,6 +22,15 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/files/`). 
 - Rail ends (after a thin line) with a Timer/clock icon: placeholder, does nothing yet.
   Planned there: stopwatch, alarm, private calendar (not in the main nav, user choice).
 
+## Books (2026-10-25) — `Books.kt`
+- Book icon in the rail (after PDF). Hold a PDF → "+ Add to Books" (or "✓ In Books") / Delete file.
+  Hold a book → Remove from Books (the PDF file stays).
+- Opening from Books starts at the saved page; double tap a page = save it ("Page N saved" toast,
+  "Saved" tag on that page). Opening the same PDF from the PDF tab always starts at page 1.
+- Only the list + page numbers are stored (private prefs); PDF files are never modified.
+- Deleting a PDF that is in Books (PDF tab or All files): first "This PDF is in Books → Remove
+  from Books", then the normal delete confirm appears.
+
 ## Viewers (full screen, nav hidden; back arrow + name top-left; system back works)
 - PDF: built-in `PdfRenderer`, exact pages, scroll down; two-finger pinch zoom 1–4x.
 - Word .docx: own zip+XML reader: headings, bold/italic, bullets, pictures, simple tables.

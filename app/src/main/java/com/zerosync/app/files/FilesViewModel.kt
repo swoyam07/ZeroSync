@@ -18,6 +18,8 @@ enum class DocKind(val label: String, val exts: List<String>) {
     /** Every file on the phone, any type, A–Z. */
     All("All files", emptyList()),
     Pdf("PDF", listOf("pdf")),
+    /** PDFs added as books (reading position remembered). */
+    Books("Books", emptyList()),
     Word("Word", listOf("docx", "doc")),
     Ppt("PPT", listOf("pptx", "ppt")),
     Excel("Excel", listOf("xlsx", "xls")),
@@ -36,7 +38,8 @@ data class DocFile(val uri: Uri, val name: String, val size: Long, val modified:
 sealed interface DocContent {
     data object Loading : DocContent
     data class Failed(val message: String) : DocContent
-    data class Pdf(val uri: Uri) : DocContent
+    /** [startPage] 0-based; [book] = opened from Books (double tap saves the page). */
+    data class Pdf(val uri: Uri, val startPage: Int = 0, val book: Boolean = false) : DocContent
     data class Word(val blocks: List<DocBlock>) : DocContent
     data class Slides(val presentation: Presentation) : DocContent
     data class Excel(val sheets: List<Sheet>) : DocContent
@@ -167,7 +170,8 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         if (!doc.canPreview) {
             return DocContent.Failed("Old .${doc.ext} format can't be previewed. Save it as .${doc.ext}x to view it.")
         }
-        if (doc.kind == DocKind.Pdf) return DocContent.Pdf(doc.uri)
+        if (doc.kind == DocKind.Pdf) return DocContent.Pdf(doc.uri) // PDF tab: always page 1
+        if (doc.kind == DocKind.Books) return DocContent.Pdf(doc.uri, Books.page(getApplication(), doc.uri).coerceAtLeast(0), book = true)
         if (doc.kind == DocKind.Images) return DocContent.Picture(doc.uri)
         if (doc.kind == DocKind.Videos) return DocContent.Video(doc.uri)
         val input = resolver.openInputStream(doc.uri) ?: error("Can't open this file")

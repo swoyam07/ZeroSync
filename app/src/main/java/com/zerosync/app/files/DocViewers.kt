@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
@@ -40,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -89,7 +91,7 @@ fun DocViewer(doc: DocFile, content: DocContent, onBack: () -> Unit) {
         when (content) {
             DocContent.Loading -> Message("Opening…")
             is DocContent.Failed -> Message(content.message)
-            is DocContent.Pdf -> PdfView(content.uri)
+            is DocContent.Pdf -> PdfView(content.uri, content.startPage, content.book)
             is DocContent.Word -> WordView(content.blocks)
             is DocContent.Slides -> SlidesView(content.presentation)
             is DocContent.Excel -> ExcelView(content.sheets)
@@ -166,7 +168,11 @@ private fun Zoomable(content: @Composable () -> Unit) {
 // ---------- PDF: exact pages with Android's built-in PdfRenderer ----------
 
 @Composable
-private fun PdfView(uri: Uri) {
+/**
+ * [book] = opened from Books: starts at [startPage]; double tap a page = save it as the place
+ * to reopen (only remembered by ZeroSync, the PDF is not changed).
+ */
+private fun PdfView(uri: Uri, startPage: Int = 0, book: Boolean = false) {
     val context = LocalContext.current
     val lock = remember { Mutex() } // PdfRenderer can draw only one page at a time
     val renderer by produceState<PdfRenderer?>(null, uri) {
@@ -176,12 +182,17 @@ private fun PdfView(uri: Uri) {
         awaitDispose { value?.let { r -> runCatching { r.close() } } }
     }
     val pdf = renderer ?: return Message("Opening…")
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = startPage.coerceIn(0, (pdf.pageCount - 1).coerceAtLeast(0)))
+    var savedPage by remember { mutableIntStateOf(if (book) startPage else -1) }
+    var toast by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    toast?.let { LaunchedEffect(it) { kotlinx.coroutines.delay(1500); toast = null } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Draw pages 1.5x the screen width so zooming stays sharp (capped to save memory).
         val targetWidth = (constraints.maxWidth * 1.5f).toInt().coerceAtMost(2000)
         Zoomable {
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(top = 64.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -205,15 +216,35 @@ private fun PdfView(uri: Uri) {
                     if (bmp == null) {
                         Box(Modifier.fillMaxWidth().aspectRatio(1f / 1.414f).background(ZsColors.Surface))
                     } else {
-                        Image(
-                            bmp.asImageBitmap(),
-                            contentDescription = "Page ${index + 1}",
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        Box {
+                            Image(
+                                bmp.asImageBitmap(),
+                                contentDescription = "Page ${index + 1}",
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier.fillMaxWidth().then(
+                                    if (book) Modifier.pointerInput(index) {
+                                        detectTapGestures(onDoubleTap = {
+                                            Books.savePage(context, uri, index)
+                                            savedPage = index
+                                            toast = "Page ${index + 1} saved"
+                                        })
+                                    } else Modifier,
+                                ),
+                            )
+                            // Small "saved" mark on the saved page.
+                            if (book && index == savedPage) {
+                                Text("Saved", color = Color.White, style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).clip(RoundedCornerShape(50))
+                                        .background(Color.Black.copy(alpha = 0.75f)).padding(horizontal = 10.dp, vertical = 4.dp))
+                            }
+                        }
                     }
                 }
             }
+        }
+        toast?.let {
+            Text(it, color = Color.Black, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)
+                .clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 18.dp, vertical = 10.dp))
         }
     }
 }
