@@ -22,6 +22,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -195,17 +196,44 @@ private fun CameraView(vm: CameraViewModel) {
     }
 
     // Camera runs only while this screen is shown (CameraX also stops it in the background).
-    DisposableEffect(lifecycleOwner) {
+    // QR mode adds a frame reader (ZXing, offline) instead of the photo capture.
+    val qrMode = vm.mode == CameraMode.Qr
+    DisposableEffect(lifecycleOwner, qrMode) {
         val future = ProcessCameraProvider.getInstance(context)
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
         future.addListener({
             val provider = future.get()
             val preview = Preview.Builder().setResolutionSelector(selector).build()
                 .also { it.surfaceProvider = previewView.surfaceProvider }
             provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+            if (qrMode) {
+                val analysis = androidx.camera.core.ImageAnalysis.Builder()
+                    .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                val reader = com.google.zxing.MultiFormatReader().apply {
+                    setHints(mapOf(com.google.zxing.DecodeHintType.TRY_HARDER to true))
+                }
+                analysis.setAnalyzer(worker) { image ->
+                    // Paused while a result is on screen.
+                    if (vm.qrResult == null) {
+                        decodeFrame(reader, image)?.let { r ->
+                            val info = checkQr(r)
+                            previewView.post { if (vm.qrResult == null) vm.qrResult = info }
+                        }
+                    }
+                    image.close()
+                }
+                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            } else {
+                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+            }
         }, ContextCompat.getMainExecutor(context))
-        onDispose { runCatching { future.get().unbindAll() } }
+        onDispose {
+            runCatching { future.get().unbindAll() }
+            worker.shutdown()
+        }
     }
+    vm.qrResult?.let { QrResultSheet(it, onClose = { vm.qrResult = null }) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewW = constraints.maxWidth.toFloat()
@@ -238,7 +266,7 @@ private fun CameraView(vm: CameraViewModel) {
             }
             // Shutter exactly in the centre; Saved folder at the right edge.
             Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
-                Shutter(enabled = !vm.busy) {
+                if (!qrMode) Shutter(enabled = !vm.busy) {
                     capture.takePicture(
                         ContextCompat.getMainExecutor(context),
                         object : ImageCapture.OnImageCapturedCallback() {
@@ -260,7 +288,7 @@ private fun CameraView(vm: CameraViewModel) {
     }
 }
 
-private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf)
+private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf, CameraMode.Qr)
 
 /**
  * Frosted dark panel with the 3 document modes (round icon + small caps label).
@@ -309,6 +337,7 @@ private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modi
                     val icon = when (mode) {
                         CameraMode.Passport -> ZsIcons.Contact
                         CameraMode.Id -> ZsIcons.Badge
+                        CameraMode.Qr -> ZsIcons.Qr
                         else -> ZsIcons.Pdf
                     }
                     Icon(icon, contentDescription = null, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(24.dp))
@@ -434,6 +463,7 @@ private fun SavedList(vm: CameraViewModel) {
                     val icon = when (mode) {
                         CameraMode.Passport -> ZsIcons.Contact
                         CameraMode.Id -> ZsIcons.Badge
+                        CameraMode.Qr -> ZsIcons.Qr
                         else -> ZsIcons.Pdf
                     }
                     Icon(icon, contentDescription = mode.label, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(22.dp))
@@ -573,3 +603,82 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
 
 private fun hasCamera(context: Context) =
     ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+/** Find a code in one camera frame (brightness channel only). null = none in this frame. */
+private fun decodeFrame(reader: com.google.zxing.MultiFormatReader, image: ImageProxy): com.google.zxing.Result? {
+    val plane = image.planes.firstOrNull() ?: return null
+    val buf = plane.buffer
+    val rowStride = plane.rowStride
+    val bytes = ByteArray(buf.remaining()).also { buf.get(it) }
+    val height = image.height
+    if (bytes.size < rowStride * (height - 1) + image.width) return null
+    val source = com.google.zxing.PlanarYUVLuminanceSource(bytes, rowStride, height, 0, 0, image.width, height, false)
+    return runCatching {
+        reader.decodeWithState(com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(source)))
+    }.getOrNull().also { reader.reset() }
+}
+
+/**
+ * What the code says — text only. Nothing is opened, joined, called or saved.
+ * Type, readable fields (Wi-Fi password hidden until tapped), warnings, raw text, Copy / Cancel.
+ */
+@Composable
+private fun QrResultSheet(info: QrInfo, onClose: () -> Unit) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var showSecret by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
+    val worst = info.warnings.maxOfOrNull { it.level } ?: QrLevel.Info
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = ZsColors.Surface,
+        title = {
+            Column {
+                Text(info.type, color = if (worst == QrLevel.Danger) Color(0xFFE53935) else Color.White)
+                Text(info.format, color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
+            }
+        },
+        text = {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                info.warnings.forEach { w ->
+                    val c = when (w.level) { QrLevel.Danger -> Color(0xFFE53935); QrLevel.Caution -> Color.White; QrLevel.Info -> ZsColors.Secondary }
+                    Text((if (w.level == QrLevel.Info) "" else "⚠ ") + w.text, color = c, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp))
+                }
+                info.fields.forEach { (label, value) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Text(label, color = ZsColors.Secondary, modifier = Modifier.weight(0.4f))
+                        val secret = label == info.secretField && !showSecret
+                        Text(
+                            if (secret) "••••••  (tap)" else value,
+                            color = Color.White,
+                            fontWeight = if (label == "Real site") androidx.compose.ui.text.font.FontWeight.Bold else null,
+                            modifier = Modifier.weight(0.6f).then(if (label == info.secretField) Modifier.clickable { showSecret = !showSecret } else Modifier),
+                        )
+                    }
+                }
+                Text("Full text", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 10.dp))
+                // Plain text only: not clickable, nothing is opened.
+                // The Wi-Fi password is masked here too until the eye/tap shows it.
+                val secretValue = info.secretField?.let { k -> info.fields.firstOrNull { it.first == k }?.second }
+                val shownRaw = if (secretValue != null && !showSecret) info.raw.replace(secretValue, "••••••") else info.raw
+                Text(shownRaw, color = Color.White, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black).padding(10.dp))
+                // Wi-Fi: copy just the password (it stays hidden on screen unless tapped).
+                info.secretField?.let { key ->
+                    info.fields.firstOrNull { it.first == key }?.second?.let { secret ->
+                        TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(secret)); copied = true }) {
+                            Text("Copy ${key.lowercase()} only", color = Color.White)
+                        }
+                    }
+                }
+                if (copied) Text("Copied", color = ZsColors.Secondary, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(info.raw)); copied = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            ) { Text("Copy") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel", color = ZsColors.Secondary) } },
+    )
+}

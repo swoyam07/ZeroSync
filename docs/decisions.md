@@ -18,6 +18,7 @@
 | 2026-10-22 | Phone contacts | Own private store, AES-GCM + Android Keystore, no shared contacts | User wants contacts only ZeroSync can read |
 | 2026-10-22 | Messages | Default SMS app (option A), text only, notifications show sender only | User wants full messaging in ZeroSync |
 | 2026-10-23 | Alarm | AlarmManager.setAlarmClock + boot re-schedule + foreground service only while ringing | User approved background parts; reliable wake-up |
+| 2026-10-25 | QR scanner | ZXing core 3.5.3 (offline decoder) + own offline link checks | Small, open source, no Google services, no internet |
 | 2026-10-18 | Music playback | ExoPlayer in ViewModel; NO service/notification (media3-session removed) | User doesn't want a notification; screen-off play is enough |
 
 ## Open questions

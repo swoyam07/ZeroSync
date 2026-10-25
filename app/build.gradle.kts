@@ -54,4 +54,7 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+
+    // QR scanner (approved 2026-10-25): offline decoder only, no camera/network code.
+    implementation(libs.zxing.core)
 }

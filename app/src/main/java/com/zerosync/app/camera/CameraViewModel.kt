@@ -20,6 +20,8 @@ enum class CameraMode(val label: String, val aspect: Float) {
     Passport("Passport", 35f / 45f),
     Id("ID", 85.6f / 54f),
     Pdf("PDF", 210f / 297f),
+    /** QR / barcode scanner: square frame, shows the text only (never opens anything). */
+    Qr("QR", 1f),
     Saved("Saved", 1f), // list of captures, not a camera
 }
 
@@ -27,6 +29,9 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = CameraRepository(app)
 
     var mode by mutableStateOf(CameraMode.Passport)
+
+    /** Last scanned code (null = still scanning). Scanning pauses while it is shown. */
+    var qrResult by mutableStateOf<QrInfo?>(null)
 
     /** Camera mode to return to when leaving Saved. */
     val lastCameraMode: CameraMode get() = _lastCameraMode

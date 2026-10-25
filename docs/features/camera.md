@@ -20,6 +20,18 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
   Category = file name prefix.
 - Delete is two-step, like the File section: hold a row → "Delete this file?" → red Delete.
 
+## QR scanner (2026-10-25) — `QrCheck.kt`
+- 4th mode "QR" in the mode panel (square frame, no shutter). ZXing core 3.5.3 decodes frames
+  offline (QR + barcodes: EAN/UPC, Code 128/39, Data Matrix, Aztec, PDF417).
+- Result card: type, readable fields, warnings, full text. Only Copy / Cancel — NOTHING is ever
+  opened, joined, called, sent or saved. Scanning pauses while the card is open.
+- Types: website, dangerous link (javascript:/intent:/data:/file:/content:), payment (EMV
+  "000201…": merchant, city, amount, network), app link, Wi-Fi (password hidden), phone, SMS,
+  email, contact card, location, calendar event, ISBN, product code, text.
+- Link checks (text only, offline): http, @ trick, raw IP, punycode xn--, shorteners, risky
+  endings, bank/wallet name outside the real domain, very long / messy. Real domain shown bold.
+  Can't check online blacklists or who owns a site (no internet by design).
+
 ## Privacy (user decision 2026-10-21)
 - Everything is saved PRIVATE in app storage (`filesDir/camera`). Other apps can't see it.
 - Public switch ON = copy to shared storage (`Pictures/ZeroSync` for photos,
