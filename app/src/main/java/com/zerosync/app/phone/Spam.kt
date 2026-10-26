@@ -178,17 +178,24 @@ fun SpamListScreen(onDone: () -> Unit) {
     }
 }
 
-/** Spam icon: red circle with a white "!" (screen readers say "Spam"). */
+/**
+ * Spam icon: red circle with a white "!" (screen readers say "Spam").
+ * Drawn (not text) so the "!" sits exactly in the middle at any size.
+ */
 @Composable
 fun SpamBadge(size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(size)
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(Color(0xFFE53935))
-            .semantics { contentDescription = "Spam" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("!", color = Color.White, fontSize = (size.value * 0.62f).sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    androidx.compose.foundation.Canvas(modifier.size(size).semantics { contentDescription = "Spam" }) {
+        val r = this.size.minDimension / 2f
+        drawCircle(Color(0xFFE53935), r)
+        val w = r * 0.26f // stroke width of the "!"
+        // Bar: from 28% to 62% of the height; dot at 76%.
+        drawLine(
+            Color.White,
+            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.27f),
+            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.60f),
+            strokeWidth = w,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+        )
+        drawCircle(Color.White, w * 0.62f, androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.76f))
     }
 }
