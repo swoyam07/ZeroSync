@@ -90,58 +90,104 @@ fun FilesScreen(vm: FilesViewModel) {
 
     // Delete, two steps: hold an item -> confirm box -> red Delete removes the file from the phone.
     var toDelete by remember { mutableStateOf<DocFile?>(null) }
-    // Hold a file: PDFs → Add to Books / Delete; Books → Remove from Books (file stays);
+    // Hold a file: PDF / Word / PPT / Excel → Rename + Delete (PDF also Add to / Remove from Books);
     // anything else → Delete.
     var options by remember { mutableStateOf<DocFile?>(null) }
+    var renaming by remember { mutableStateOf<DocFile?>(null) }
+    // All files: hold one file = select mode; then tap files to tick/untick, Delete removes them all.
+    var selected by remember { mutableStateOf(emptySet<DocFile>()) }
+    var confirmMany by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.kind) { selected = emptySet() } // switching type ends select mode
+    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
     options?.let { doc ->
-        when (doc.kind) {
-            DocKind.Books -> AlertDialog(
-                onDismissRequest = { options = null },
-                containerColor = ZsColors.Surface,
-                title = { Text("Remove from Books?", color = Color.White) },
-                text = { Text("${doc.name}\nThe PDF itself stays on the phone.", color = ZsColors.OnSurface) },
-                confirmButton = { Button(onClick = { Books.remove(context, doc.uri); options = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("Remove") } },
-                dismissButton = { TextButton(onClick = { options = null }) { Text("Cancel", color = ZsColors.Secondary) } },
-            )
-            DocKind.Pdf -> AlertDialog(
+        if (doc.kind in setOf(DocKind.Pdf, DocKind.Word, DocKind.Ppt, DocKind.Excel)) {
+            AlertDialog(
                 onDismissRequest = { options = null },
                 containerColor = ZsColors.Surface,
                 title = { Text(doc.name, color = Color.White, maxLines = 2) },
                 text = {
-                    Column {
-                        val inBooks = remember(Books.version) { Books.contains(context, doc.uri) }
-                        Text(if (inBooks) "✓  In Books" else "+  Add to Books", color = Color.White,
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !inBooks) { Books.add(context, doc); options = null }.padding(vertical = 12.dp))
-                        Text("Delete file", color = DeleteRed,
-                            modifier = Modifier.fillMaxWidth().clickable { toDelete = doc; options = null }.padding(vertical = 12.dp))
+                    // One row of icon buttons: Book (PDF only; white, outlined when removing), Rename, Delete (red).
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (doc.kind == DocKind.Pdf) { // only PDFs can be books
+                            val inBooks = remember(Books.version) { Books.contains(context, doc.uri) }
+                            ActionButton(
+                                ZsIcons.Book, if (inBooks) "Remove Book" else "Add Book",
+                                fill = if (inBooks) Color.Transparent else Color.White,
+                                content = if (inBooks) Color.White else Color.Black,
+                                outline = Color.White,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                if (inBooks) Books.find(context, doc.uri)?.let { Books.remove(context, it.uri) } else Books.add(context, doc)
+                                options = null
+                            }
+                        }
+                        ActionButton(ZsIcons.Edit, "Rename", Color.Transparent, Color.White, ZsColors.Secondary, Modifier.weight(1f)) {
+                            renaming = doc; options = null
+                        }
+                        ActionButton(ZsIcons.Delete, "Delete", DeleteRed, Color.White, null, Modifier.weight(1f)) {
+                            toDelete = doc; options = null
+                        }
                     }
                 },
                 confirmButton = {},
                 dismissButton = { TextButton(onClick = { options = null }) { Text("Cancel", color = ZsColors.Secondary) } },
             )
-            else -> { toDelete = doc; options = null }
-        }
+        } else if (vm.kind == DocKind.All) { selected = selected + doc; options = null }
+        else { toDelete = doc; options = null }
+    }
+    // Rename: text box with the name (extension kept as is), Save / Cancel.
+    renaming?.let { doc ->
+        var name by remember(doc) { mutableStateOf(doc.name.substringBeforeLast('.', doc.name)) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            containerColor = ZsColors.Surface,
+            title = { Text("Rename", color = Color.White) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    suffix = { if (doc.ext.isNotEmpty()) Text(".${doc.ext}", color = ZsColors.Secondary) },
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White, unfocusedBorderColor = ZsColors.Secondary, cursorColor = Color.White,
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.rename(doc, name) { ok ->
+                            if (!ok) android.widget.Toast.makeText(context, "Couldn't rename (name empty, taken, or not allowed)", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        renaming = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel", color = ZsColors.Secondary) } },
+        )
+    }
+    if (confirmMany) {
+        AlertDialog(
+            onDismissRequest = { confirmMany = false },
+            containerColor = ZsColors.Surface,
+            title = { Text("Delete ${selected.size} files?", color = Color.White) },
+            text = { Text("They will be removed from the phone.", color = ZsColors.OnSurface) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        selected.forEach { doc -> Books.find(context, doc.uri)?.let { Books.remove(context, it.uri) } }
+                        vm.deleteMany(selected.toList())
+                        selected = emptySet(); confirmMany = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmMany = false }) { Text("Cancel", color = ZsColors.Secondary) } },
+        )
     }
     toDelete?.let { doc ->
-        // A PDF tagged as a book must be removed from Books first; only then can it be deleted.
-        val inBooks = remember(Books.version, doc) { Books.all(context).any { it.uri.lastPathSegment == doc.uri.lastPathSegment } }
-        if (inBooks) {
-            AlertDialog(
-                onDismissRequest = { toDelete = null },
-                containerColor = ZsColors.Surface,
-                title = { Text("This PDF is in Books", color = Color.White) },
-                text = { Text("${doc.name}\nRemove it from Books first, then you can delete it.", color = ZsColors.OnSurface) },
-                confirmButton = {
-                    Button(
-                        onClick = { Books.all(context).filter { it.uri.lastPathSegment == doc.uri.lastPathSegment }.forEach { Books.remove(context, it.uri) } },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                    ) { Text("Remove from Books") }
-                },
-                dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel", color = ZsColors.Secondary) } },
-            )
-            return@let
-        }
         AlertDialog(
             onDismissRequest = { toDelete = null },
             containerColor = ZsColors.Surface,
@@ -149,7 +195,11 @@ fun FilesScreen(vm: FilesViewModel) {
             text = { Text("${doc.name}\nIt will be removed from the phone.", color = ZsColors.OnSurface) },
             confirmButton = {
                 Button(
-                    onClick = { vm.delete(doc); toDelete = null },
+                    onClick = {
+                        // A book is taken off the Books list too, so no broken entry is left.
+                        Books.find(context, doc.uri)?.let { Books.remove(context, it.uri) }
+                        vm.delete(doc); toDelete = null
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = DeleteRed, contentColor = Color.White),
                 ) { Text("Delete") }
             },
@@ -159,11 +209,27 @@ fun FilesScreen(vm: FilesViewModel) {
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 12.dp, end = RailWidth)) {
-        val books = remember(Books.version) { Books.all(context) }
+        // Books are marked inside the PDF list (white border), by file id.
+        val bookIds = remember(Books.version) { Books.all(context).map { it.uri.lastPathSegment }.toSet() }
         val shown = when (vm.kind) {
             DocKind.All -> vm.allFiles
-            DocKind.Books -> books
             else -> vm.docs.filter { it.kind == vm.kind }
+        }
+        if (selected.isNotEmpty()) {
+            // Select mode bar: ✕ (stop) · "N selected" · red Delete.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable { selected = emptySet() }, contentAlignment = Alignment.Center) {
+                    Icon(ZsIcons.Close, contentDescription = "Stop selecting", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+                Text("${selected.size} selected", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                Row(
+                    Modifier.clip(RoundedCornerShape(50)).background(DeleteRed).clickable { confirmMany = true }.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(ZsIcons.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Text("Delete", color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                }
+            }
         }
         if (shown.isEmpty()) {
             Text(
@@ -214,7 +280,18 @@ fun FilesScreen(vm: FilesViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = NavClearance),
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
         ) {
-            items(shown, key = { it.uri.toString() }) { doc -> FileRow(doc, onLongClick = { options = doc }) { vm.open(doc) } }
+            items(shown, key = { it.uri.toString() }) { doc ->
+                val ticked = doc in selected
+                FileRow(
+                    doc,
+                    isBook = doc.kind == DocKind.Pdf && doc.uri.lastPathSegment in bookIds,
+                    selected = ticked,
+                    onLongClick = { options = doc },
+                ) {
+                    // In select mode a tap ticks / unticks; otherwise it opens the file.
+                    if (selected.isNotEmpty()) selected = if (ticked) selected - doc else selected + doc else vm.open(doc)
+                }
+            }
         }
     }
     // Type picker: icon column at the bottom-right corner, in reach of the right thumb.
@@ -251,7 +328,7 @@ private fun KindRail(selected: DocKind, onSelect: (DocKind) -> Unit, modifier: M
             .padding(5.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        DocKind.entries.forEach { k ->
+        DocKind.entries.filter { it != DocKind.Books }.forEach { k -> // Books live inside PDF
             val active = k == selected
             Box(
                 Modifier
@@ -279,13 +356,17 @@ private fun KindRail(selected: DocKind, onSelect: (DocKind) -> Unit, modifier: M
 }
 
 @Composable
-private fun FileRow(doc: DocFile, onLongClick: () -> Unit, onClick: () -> Unit) {
+private fun FileRow(doc: DocFile, onLongClick: () -> Unit, isBook: Boolean = false, selected: Boolean = false, onClick: () -> Unit) {
     val context = LocalContext.current
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(ZsColors.Surface)
+            // Book = white border (opens at the saved page).
+            .then(if (isBook) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(14.dp)) else Modifier)
+            // Selected (All files select mode): lighter card.
+            .then(if (selected) Modifier.background(ZsColors.PrimaryContainer) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -307,6 +388,37 @@ private fun FileRow(doc: DocFile, onLongClick: () -> Unit, onClick: () -> Unit) 
                 color = ZsColors.Secondary,
             )
         }
+        if (selected) {
+            Box(Modifier.padding(start = 8.dp).size(24.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                Icon(ZsIcons.Check, contentDescription = "Selected", tint = Color.Black, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+/** Rounded button: icon on top, short label under it. [outline] null = no border. */
+@Composable
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    fill: Color,
+    content: Color,
+    outline: Color?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(fill)
+            .then(if (outline != null) Modifier.border(1.5.dp, outline, shape) else Modifier)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
+        Text(label, color = content, style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

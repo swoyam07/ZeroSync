@@ -249,6 +249,7 @@ private fun CameraView(vm: CameraViewModel) {
         ) {
             vm.message?.let { Text(it, color = Color.White, modifier = Modifier.padding(bottom = 12.dp)) }
             // Mode panel (Passport · ID · PDF) under the frame: tap, or swipe left/right inside it.
+            // In QR mode none of them is highlighted; tapping one leaves QR.
             ModePanel(vm.mode, onSelect = { vm.mode = it }, Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp))
             // PDF in progress: Cancel and Submit in a row above the shutter.
             if (vm.mode == CameraMode.Pdf && vm.pdfPages.isNotEmpty()) {
@@ -264,8 +265,13 @@ private fun CameraView(vm: CameraViewModel) {
                     ) { Text("Submit ${vm.pdfPages.size}") }
                 }
             }
-            // Shutter exactly in the centre; Saved folder at the right edge.
+            // Shutter exactly in the centre; QR at the left edge, Saved folder at the right edge.
             Box(Modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                QrButton(
+                    active = qrMode,
+                    onClick = { vm.mode = if (qrMode) CameraMode.Passport else CameraMode.Qr }, // tap again = back to photos
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 28.dp),
+                )
                 if (!qrMode) Shutter(enabled = !vm.busy) {
                     capture.takePicture(
                         ContextCompat.getMainExecutor(context),
@@ -288,7 +294,7 @@ private fun CameraView(vm: CameraViewModel) {
     }
 }
 
-private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf, CameraMode.Qr)
+private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf) // QR has its own button left of the shutter
 
 /**
  * Frosted dark panel with the 3 document modes (round icon + small caps label).
@@ -351,6 +357,22 @@ private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modi
                 )
             }
         }
+    }
+}
+
+/** QR scanner button (left of the shutter), same size as Saved. White when QR is on. */
+@Composable
+private fun QrButton(active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) Color.White else Color.Transparent)
+            .border(1.5.dp, Color.White, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(ZsIcons.Qr, contentDescription = "QR scanner", tint = if (active) Color.Black else Color.White, modifier = Modifier.size(24.dp))
     }
 }
 

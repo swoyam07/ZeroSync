@@ -18,7 +18,7 @@ enum class DocKind(val label: String, val exts: List<String>) {
     /** Every file on the phone, any type, A–Z. */
     All("All files", emptyList()),
     Pdf("PDF", listOf("pdf")),
-    /** PDFs added as books (reading position remembered). */
+    /** PDFs added as books (reading position remembered). Shown inside the PDF tab, not a tab of its own. */
     Books("Books", emptyList()),
     Word("Word", listOf("docx", "doc")),
     Ppt("PPT", listOf("pptx", "ppt")),
@@ -170,8 +170,11 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         if (!doc.canPreview) {
             return DocContent.Failed("Old .${doc.ext} format can't be previewed. Save it as .${doc.ext}x to view it.")
         }
-        if (doc.kind == DocKind.Pdf) return DocContent.Pdf(doc.uri) // PDF tab: always page 1
-        if (doc.kind == DocKind.Books) return DocContent.Pdf(doc.uri, Books.page(getApplication(), doc.uri).coerceAtLeast(0), book = true)
+        if (doc.kind == DocKind.Pdf || doc.kind == DocKind.Books) {
+            // A PDF that is a book opens at its saved page (double tap saves); others at page 1.
+            val book = Books.find(getApplication(), doc.uri) ?: return DocContent.Pdf(doc.uri)
+            return DocContent.Pdf(book.uri, Books.page(getApplication(), book.uri).coerceAtLeast(0), book = true)
+        }
         if (doc.kind == DocKind.Images) return DocContent.Picture(doc.uri)
         if (doc.kind == DocKind.Videos) return DocContent.Video(doc.uri)
         val input = resolver.openInputStream(doc.uri) ?: error("Can't open this file")
@@ -211,6 +214,15 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Delete several files at once (All files select mode). */
+    fun deleteMany(list: List<DocFile>) {
+        viewModelScope.launch {
+            val gone = withContext(Dispatchers.IO) { list.filter { deleteFile(it) }.map { it.uri.lastPathSegment }.toSet() }
+            docs = docs.filter { it.uri.lastPathSegment !in gone }
+            allFiles = allFiles.filter { it.uri.lastPathSegment !in gone }
+        }
+    }
+
     /**
      * Delete through Android's media list; if that refuses (common for non-media files like
      * .zip/.apk), delete the real file by its path ("All files access" allows this) and then
@@ -226,6 +238,51 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val file = java.io.File(path)
         if (!file.exists() || !file.delete()) return false
         runCatching { resolver.delete(doc.uri, null, null) } // drop the stale entry
+        return true
+    }
+
+    /**
+     * Rename a file on the phone; [newName] without the extension (the extension is kept).
+     * [onDone] gets false when the name is empty/invalid or Android refused.
+     */
+    fun rename(doc: DocFile, newName: String, onDone: (Boolean) -> Unit) {
+        val base = newName.trim()
+        if (base.isEmpty() || base.any { it in "/\\:*?\"<>|" }) { onDone(false); return }
+        val full = if (doc.ext.isEmpty()) base else "$base.${doc.ext}"
+        if (full == doc.name) { onDone(true); return }
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { renameFile(doc, full) }
+            if (ok) {
+                // Same file id, new name: update every list and the Books entry in place.
+                val id = doc.uri.lastPathSegment
+                docs = docs.map { if (it.uri.lastPathSegment == id) it.copy(name = full) else it }
+                allFiles = allFiles.map { if (it.uri.lastPathSegment == id) it.copy(name = full) else it }
+                Books.rename(getApplication(), doc.uri, full)
+            }
+            onDone(ok)
+        }
+    }
+
+    /**
+     * Rename through Android's media list (keeps the same id). If that refuses, rename the real
+     * file by its path ("All files access" allows this) and tell the media list about the new path.
+     */
+    private fun renameFile(doc: DocFile, full: String): Boolean {
+        val values = android.content.ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, full) }
+        if (runCatching { resolver.update(doc.uri, values, null, null) > 0 }.getOrDefault(false)) return true
+        val path = runCatching {
+            resolver.query(doc.uri, arrayOf(MediaStore.Files.FileColumns.DATA), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull() ?: return false
+        val file = java.io.File(path)
+        val target = java.io.File(file.parentFile, full)
+        if (!file.exists() || target.exists() || !file.renameTo(target)) return false
+        val values2 = android.content.ContentValues().apply {
+            put(MediaStore.Files.FileColumns.DATA, target.path)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, full)
+        }
+        runCatching { resolver.update(doc.uri, values2, null, null) } // point the same entry at the new path
         return true
     }
 

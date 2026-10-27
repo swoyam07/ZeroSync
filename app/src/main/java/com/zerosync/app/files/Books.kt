@@ -12,7 +12,7 @@ import org.json.JSONObject
 /**
  * Books: PDFs you chose to read as books, each with the page you saved (double tap).
  * Only this list + page numbers are stored (private); the PDF files are never changed.
- * Opening a PDF from the PDF tab always starts at page 1; from Books, at the saved page.
+ * Books live in the PDF tab (no separate tab): a book has a white border and opens at its saved page.
  */
 object Books {
     var version by mutableIntStateOf(0)
@@ -36,7 +36,10 @@ object Books {
         }
     }
 
-    fun contains(context: Context, uri: Uri) = all(context).any { it.uri == uri }
+    fun contains(context: Context, uri: Uri) = find(context, uri) != null
+
+    /** The saved book for this file. Matched by file id, since the same file can come with a different uri. */
+    fun find(context: Context, uri: Uri): DocFile? = all(context).firstOrNull { it.uri.lastPathSegment == uri.lastPathSegment }
 
     fun add(context: Context, doc: DocFile) {
         if (contains(context, doc.uri)) return
@@ -50,6 +53,16 @@ object Books {
         val out = JSONArray()
         for (i in 0 until arr.length()) arr.getJSONObject(i).let { if (it.getString("uri") != uri.toString()) out.put(it) }
         write(context, out)
+    }
+
+    /** Keep the book's shown name in step after the file is renamed. */
+    fun rename(context: Context, uri: Uri, name: String) {
+        val arr = read(context)
+        var changed = false
+        for (i in 0 until arr.length()) arr.getJSONObject(i).let {
+            if (Uri.parse(it.getString("uri")).lastPathSegment == uri.lastPathSegment) { it.put("name", name); changed = true }
+        }
+        if (changed) write(context, arr)
     }
 
     /** Saved page (0-based) or -1 when none. */
