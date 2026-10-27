@@ -91,10 +91,11 @@ private fun MessagesApp(startAddress: String?, onClose: () -> Unit) {
 }
 
 @Composable
-private fun TopBar(title: String, onBack: () -> Unit, action: (@Composable () -> Unit)? = null) {
+private fun TopBar(title: String, onBack: () -> Unit, leading: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(ZsIcons.Back, contentDescription = "Back", tint = Color.White,
             modifier = Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack).padding(10.dp))
+        leading?.invoke() // e.g. the contact's photo
         Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 8.dp))
         action?.invoke()
@@ -129,26 +130,49 @@ private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack
             dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("Cancel", color = ZsColors.Secondary) } },
         )
     }
-    val list by produceState<List<Pair<Conversation, String>>?>(null, SmsStore.version) {
-        value = withContext(Dispatchers.IO) { SmsStore.conversations(context).map { it to nameOf(context, it.address) } }
+    // Each chat with its shown name and the saved contact (null = not saved).
+    val list by produceState<List<ChatRow>?>(null, SmsStore.version, ContactsStore.version) {
+        value = withContext(Dispatchers.IO) {
+            SmsStore.conversations(context).map { c ->
+                val contact = ContactsStore.find(context, c.address)
+                ChatRow(c, contact?.name ?: localNumber(c.address).ifEmpty { c.address }, contact)
+            }
+        }
     }
+    var query by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         TopBar("Messages", onBack)
-        val items = list
+        // Search: name, number or message text (case doesn't matter).
+        Field(query, { query = it }, "Search", Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp))
+        val q = query.trim()
+        val items = list?.let { all ->
+            if (q.isEmpty()) all
+            else all.filter { r ->
+                r.name.contains(q, ignoreCase = true) || r.conv.address.contains(q) || r.conv.last.body.contains(q, ignoreCase = true)
+            }
+        }
         when {
             items == null -> Unit
-            items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No messages", color = ZsColors.Secondary) }
+            items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(if (q.isEmpty()) "No messages" else "No chats match \"$q\"", color = ZsColors.Secondary)
+            }
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) { // room so the + never covers the last chat
-                items(items, key = { it.first.threadId }) { (conv, name) ->
+                items(items, key = { it.conv.threadId }) { r ->
+                    val conv = r.conv
                     Row(
                         // Tap = open; hold = delete this whole chat (contact stays saved).
-                        Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(conv.address) }, onLongClick = { deleting = conv to name }).padding(horizontal = 20.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().combinedClickable(onClick = { onOpen(conv.address) }, onLongClick = { deleting = conv to r.name }).padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                fontWeight = if (conv.unread > 0) FontWeight.Bold else FontWeight.Normal)
+                        ChatAvatar(r.contact, r.name, 44.dp)
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(r.name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    fontWeight = if (conv.unread > 0) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                Text(shortTime(conv.last.date), color = if (conv.unread > 0) Color.White else ZsColors.Secondary,
+                                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp))
+                            }
                             Text(conv.last.body, color = ZsColors.Secondary, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         CarrierLogo(conv.address, Modifier.padding(start = 8.dp).size(20.dp))
@@ -167,6 +191,32 @@ private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack
         Text("+", color = Color.Black, style = MaterialTheme.typography.headlineSmall)
     }
     }
+}
+
+private class ChatRow(val conv: Conversation, val name: String, val contact: com.zerosync.app.phone.Contact?)
+
+/** Saved contact = its photo (or initial, via the Contacts avatar); not saved = gray circle with a "#". */
+@Composable
+private fun ChatAvatar(contact: com.zerosync.app.phone.Contact?, name: String, size: androidx.compose.ui.unit.Dp) {
+    if (contact != null) com.zerosync.app.phone.Avatar(contact, size)
+    else Box(Modifier.size(size).clip(CircleShape).background(ZsColors.Surface), contentAlignment = Alignment.Center) {
+        Text("#", color = ZsColors.Secondary, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/** List time: today = "14:05", this week = "Mon", older = "Mar 4", other years = "3/4/24". */
+private fun shortTime(millis: Long): String {
+    val now = java.util.Calendar.getInstance()
+    val then = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+    val sameYear = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR)
+    val days = (now.timeInMillis - millis) / 86_400_000L
+    val pattern = when {
+        sameYear && now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR) -> "HH:mm"
+        days < 7 -> "EEE"
+        sameYear -> "MMM d"
+        else -> "d/M/yy"
+    }
+    return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(java.util.Date(millis))
 }
 
 /** White round count, e.g. "3". */
@@ -249,7 +299,10 @@ private fun ConversationScreen(start: String, onBack: () -> Unit) {
             val name by produceState(localNumber(address).ifEmpty { address }, address) {
                 value = withContext(Dispatchers.IO) { nameOf(context, address) }
             }
-            TopBar(name, onBack) { CarrierLogo(address, Modifier.padding(end = 8.dp).size(22.dp)) }
+            val contact by produceState<com.zerosync.app.phone.Contact?>(null, address, ContactsStore.version) {
+                value = withContext(Dispatchers.IO) { ContactsStore.find(context, address) }
+            }
+            TopBar(name, onBack, leading = { ChatAvatar(contact, name, 34.dp) }) { CarrierLogo(address, Modifier.padding(end = 8.dp).size(22.dp)) }
         }
 
         // Bubbles: received on the left (gray), sent on the right (white). Opens at the newest.
@@ -301,7 +354,10 @@ private fun ConversationScreen(start: String, onBack: () -> Unit) {
                         scope.launch(Dispatchers.IO) { SmsStore.send(context, target, body) }
                     },
                 contentAlignment = Alignment.Center,
-            ) { Icon(ZsIcons.Message, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp)) }
+            ) {
+                // Typing = send arrow; empty box = message icon.
+                Icon(if (text.isNotBlank()) ZsIcons.Send else ZsIcons.Message, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
         }
     }
 }

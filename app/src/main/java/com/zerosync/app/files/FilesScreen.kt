@@ -90,7 +90,7 @@ fun FilesScreen(vm: FilesViewModel) {
 
     // Delete, two steps: hold an item -> confirm box -> red Delete removes the file from the phone.
     var toDelete by remember { mutableStateOf<DocFile?>(null) }
-    // Hold a file: PDF / Word / PPT / Excel → Rename + Delete (PDF also Add to / Remove from Books);
+    // Hold a file: PDF / Word / PPT / Excel / Audio → Rename + Delete (PDF also Add to / Remove from Books);
     // anything else → Delete.
     var options by remember { mutableStateOf<DocFile?>(null) }
     var renaming by remember { mutableStateOf<DocFile?>(null) }
@@ -100,7 +100,7 @@ fun FilesScreen(vm: FilesViewModel) {
     LaunchedEffect(vm.kind) { selected = emptySet() } // switching type ends select mode
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
     options?.let { doc ->
-        if (doc.kind in setOf(DocKind.Pdf, DocKind.Word, DocKind.Ppt, DocKind.Excel)) {
+        if (doc.kind in setOf(DocKind.Pdf, DocKind.Word, DocKind.Ppt, DocKind.Excel, DocKind.Audio)) {
             AlertDialog(
                 onDismissRequest = { options = null },
                 containerColor = ZsColors.Surface,
@@ -212,7 +212,8 @@ fun FilesScreen(vm: FilesViewModel) {
         // Books are marked inside the PDF list (white border), by file id.
         val bookIds = remember(Books.version) { Books.all(context).map { it.uri.lastPathSegment }.toSet() }
         val shown = when (vm.kind) {
-            DocKind.All -> vm.allFiles
+            // Only files that no other tab shows (PDF, Word, PPT, Excel, Text, Images, Videos).
+            DocKind.All -> vm.allFiles.filter { it.kind == DocKind.All }
             else -> vm.docs.filter { it.kind == vm.kind }
         }
         if (selected.isNotEmpty()) {
@@ -315,6 +316,7 @@ private fun DocKind.icon() = when (this) {
     DocKind.Text -> ZsIcons.Lines
     DocKind.Images -> ZsIcons.Image
     DocKind.Videos -> ZsIcons.Movie
+    DocKind.Audio -> ZsIcons.Music
 }
 
 /** Vertical panel of type icons (no text, no counts). Selected = white rounded square, black icon. */

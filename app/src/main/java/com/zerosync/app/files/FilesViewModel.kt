@@ -15,8 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class DocKind(val label: String, val exts: List<String>) {
-    /** Every file on the phone, any type, A–Z. */
-    All("All files", emptyList()),
+    /** Every other file on the phone (types without their own tab, e.g. .zip, .apk, .mp3), A–Z. */
+    All("Other", emptyList()),
     Pdf("PDF", listOf("pdf")),
     /** PDFs added as books (reading position remembered). Shown inside the PDF tab, not a tab of its own. */
     Books("Books", emptyList()),
@@ -26,6 +26,8 @@ enum class DocKind(val label: String, val exts: List<String>) {
     Text("Text", listOf("txt", "csv")),
     Images("Images", listOf("jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp")),
     Videos("Videos", listOf("mp4", "mkv", "webm", "3gp", "mov", "avi")),
+    /** Music / sound files: listed here (rename, delete); they play in the Music section. */
+    Audio("Audio", listOf("mp3", "m4a", "aac", "wav", "ogg", "opus", "flac", "amr")),
 }
 
 data class DocFile(val uri: Uri, val name: String, val size: Long, val modified: Long, val kind: DocKind) {
@@ -177,6 +179,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (doc.kind == DocKind.Images) return DocContent.Picture(doc.uri)
         if (doc.kind == DocKind.Videos) return DocContent.Video(doc.uri)
+        if (doc.kind == DocKind.Audio) return DocContent.Failed("Audio files play in the Music section.")
         val input = resolver.openInputStream(doc.uri) ?: error("Can't open this file")
         return input.use {
             when (doc.kind) {
