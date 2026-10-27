@@ -22,6 +22,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -113,10 +132,37 @@ fun ContactsList(
             }
             return
         }
-        LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
-            items(contacts, key = { it.id }) { c ->
+        // Split by first letter (A–Z, anything else = "#"). The list is already sorted by name.
+        val groups = remember(contacts) { contacts.groupBy { letterOf(it.name) }.toSortedMap(compareBy { if (it == '#') '[' else it }) }
+        // Where each letter's header sits in the list (header + its contacts per group).
+        val headerIndex = remember(groups) {
+            var i = 0
+            groups.mapValues { (_, list) -> i.also { i += 1 + list.size } }
+        }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        var dragLetter by remember { mutableStateOf<Char?>(null) } // letter under the finger on the A–Z bar
+        // How far the list area's middle sits below the screen's middle (px), so the A–Z bar
+        // can be centred on the whole screen, not just on the list.
+        val windowHeight = LocalWindowInfo.current.containerSize.height
+        var belowMiddle by remember { mutableStateOf(0f) }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { box ->
+            belowMiddle = box.positionInWindow().y + box.size.height / 2f - windowHeight / 2f
+        }) {
+        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 8.dp)) {
+          groups.forEach { (letter, group) ->
+            item(key = "header-$letter") {
+                Text(
+                    letter.toString(),
+                    color = ZsColors.Secondary,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp),
+                )
+            }
+            items(group, key = { it.id }) { c ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { onOpen(c) }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    // Extra end space so the A–Z bar never covers the call buttons.
+                    Modifier.fillMaxWidth().clickable { onOpen(c) }.padding(start = 20.dp, end = 32.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Avatar(c, 44.dp)
@@ -136,6 +182,133 @@ fun ContactsList(
                         NumberCallCapsule(saved.map { it.number }, Modifier.padding(start = 8.dp)) { n ->
                             val sim = bestSimFor(context, n, sims)
                             if (sim != null) onCallWith(n, sim) else onCall(n)
+                        }
+                    }
+                }
+            }
+          }
+        }
+        AlphabetBar(
+            present = groups.keys,
+            active = dragLetter,
+            onActive = { dragLetter = it },
+            onPick = { letter ->
+                // Jump to that letter, or the next letter that has contacts.
+                val target = headerIndex.entries.firstOrNull { it.key >= letter }?.value ?: headerIndex.values.last()
+                scope.launch { listState.scrollToItem(target) }
+            },
+            liftPx = belowMiddle,
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
+        }
+    }
+}
+
+private val Alphabet = ('A'..'Z').toList() + '#'
+
+/** First letter for grouping: A–Z, anything else = '#'. */
+private fun letterOf(name: String): Char = name.trim().firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' } ?: '#'
+
+/**
+ * Right-edge A–Z bar. Letters that have contacts are bright, the rest very dim.
+ * Tap or drag up/down along it to jump; each new letter gives a small vibration.
+ * While dragging: a dark pill behind the bar, the letter under the finger becomes a white dot,
+ * and a round bubble with that letter (big) floats beside it.
+ */
+@Composable
+private fun AlphabetBar(
+    present: Set<Char>,
+    active: Char?,
+    onActive: (Char?) -> Unit,
+    onPick: (Char) -> Unit,
+    modifier: Modifier = Modifier,
+    liftPx: Float = 0f, // move the bar's middle up by this much (to match the screen's middle)
+) {
+    val haptics = LocalHapticFeedback.current
+    // Extra bottom room = twice the lift, which moves the bar's centre up by exactly the lift.
+    val extraBottom = with(LocalDensity.current) { (liftPx * 2).coerceAtLeast(0f).toDp() }
+    val currentOnPick by rememberUpdatedState(onPick)
+    val currentOnActive by rememberUpdatedState(onActive)
+    var last by remember { mutableStateOf<Char?>(null) } // letter under the finger
+    val bubble = 64.dp
+    // Fixed roomy spacing per letter (shrinks only on short screens); the whole bar is
+    // centred top-to-bottom on the right edge.
+    // Same room top and bottom (plus the lift): the bar is centred on the screen and "#" is never cut off.
+    BoxWithConstraints(modifier.fillMaxHeight().padding(top = 32.dp, bottom = 32.dp + extraBottom, end = 4.dp)) {
+        val slot = minOf(22.dp, maxHeight / Alphabet.size) // height per letter
+        val barHeight = slot * Alphabet.size
+        Row(Modifier.height(barHeight).align(Alignment.CenterEnd), verticalAlignment = Alignment.Top) {
+            // Bubble column: the big letter, level with the finger.
+            Box(Modifier.width(bubble + 12.dp).fillMaxHeight()) {
+                val i = active?.let { Alphabet.indexOf(it) } ?: -1
+                if (i >= 0) {
+                    val top = (slot * i + slot / 2 - bubble / 2).coerceIn(0.dp, barHeight - bubble)
+                    Box(
+                        Modifier.padding(top = top).size(bubble).clip(CircleShape).background(ZsColors.Surface)
+                            .border(1.dp, ZsColors.PrimaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(active.toString(), color = if (active in present) Color.White else ZsColors.Secondary, fontSize = 30.sp)
+                    }
+                }
+            }
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .width(24.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (active != null) ZsColors.Surface else Color.Transparent)
+                    .pointerInput(Unit) {
+                        fun pick(y: Float) {
+                            val i = (y / size.height * Alphabet.size).toInt().coerceIn(0, Alphabet.lastIndex)
+                            val letter = Alphabet[i]
+                            if (letter != last) {
+                                last = letter
+                                currentOnActive(letter)
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentOnPick(letter)
+                            }
+                        }
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            pick(down.position.y)
+                            while (true) {
+                                val change = awaitPointerEvent().changes.first()
+                                if (!change.pressed) break
+                                change.consume()
+                                pick(change.position.y)
+                            }
+                            last = null
+                            currentOnActive(null)
+                        }
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Alphabet.forEach { letter ->
+                    Box(Modifier.height(slot).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (letter == active) {
+                            Box(Modifier.size(18.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                                // Trim the font's built-in top/bottom space so the letter sits dead centre.
+                                Text(
+                                    letter.toString(),
+                                    color = Color.Black,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = TextStyle(
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeight = 10.sp,
+                                        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+                                    ),
+                                )
+                            }
+                        } else {
+                            Text(
+                                letter.toString(),
+                                color = if (letter in present) ZsColors.OnSurface else ZsColors.Secondary.copy(alpha = 0.35f),
+                                fontSize = 10.sp,
+                                fontWeight = if (letter in present) FontWeight.SemiBold else FontWeight.Normal,
+                            )
                         }
                     }
                 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -42,11 +43,11 @@ private val TIMER_STEP = 22.dp // same quick step as the folder picker (was 48)
 
 /**
  * Small round button with no icon (left side). A tap does nothing.
- * 1. Start swiping (no hold): a menu opens with 2 halves, left and right.
+ * 1. Hold still (long-press): a menu opens with 2 halves, top and bottom.
  * 2. Still holding, drag into a half:
- *    - Right: a curved bar appears on the right (shows the volume). Move the finger up for
+ *    - Up: a curved bar appears on the right (shows the volume). Move the finger up for
  *      louder, down for quieter: about [VOLUME_TRAVEL] covers the full range; each step = [onVolumeStep] (+1 / -1) + vibration.
- *    - Left: sleep timer choices. [onLeftStart] once, then [onLeftMove] with how many
+ *    - Down: sleep timer choices. [onLeftStart] once, then [onLeftMove] with how many
  *      steps the finger moved (each [TIMER_STEP]; down = positive). Lift = [onLeftRelease].
  * 3. Lift your finger: everything closes.
  */
@@ -69,8 +70,9 @@ fun VolumeButton(
     val currentOnLeftRelease by rememberUpdatedState(onLeftRelease)
     val currentMax by rememberUpdatedState(maxVolume)
     var mode by remember { mutableStateOf(VolMode.Idle) }
+    var volShift by remember { mutableFloatStateOf(0f) } // volume drag: finger travel in px (down = +)
     val pop = rememberMenuPop(mode == VolMode.Menu)
-    // Same order as TwoParts: right = volume, left = sleep timer.
+    // Same order as TwoParts: up = volume, down = sleep timer.
     val menuIcons = listOf(rememberVectorPainter(ZsIcons.Volume), rememberVectorPainter(ZsIcons.Clock))
 
     Canvas(
@@ -83,14 +85,17 @@ fun VolumeButton(
 
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    // No hold: the menu opens as soon as the finger starts moving (swipe).
-                    // Lifting without moving (a tap) does nothing.
-                    var moved = false
-                    while (!moved) {
-                        val change = awaitPointerEvent().changes.first()
-                        if (!change.pressed) return@awaitEachGesture
-                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                    }
+                    // Hold: the menu opens only after the finger stays still for [HOLD_MILLIS].
+                    // A tap, or moving before that, does nothing.
+                    val held = withTimeoutOrNull(HOLD_MILLIS) {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.first()
+                            if (!change.pressed) return@withTimeoutOrNull false
+                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
+                        }
+                        @Suppress("UNREACHABLE_CODE") false
+                    } == null // timed out = finger held still long enough
+                    if (!held) return@awaitEachGesture
 
                     mode = VolMode.Menu
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -105,11 +110,12 @@ fun VolumeButton(
                         val d = p - center
                         when (mode) {
                             VolMode.Menu -> {
-                                if (abs(d.x) < innerRadius) continue
+                                if (abs(d.y) < innerRadius) continue
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                if (d.x > 0) {
+                                if (d.y < 0) { // up = volume
                                     mode = VolMode.Volume
                                     startY = p.y
+                                    volShift = 0f
                                     steps = 0
                                 } else {
                                     mode = VolMode.Timer
@@ -119,6 +125,7 @@ fun VolumeButton(
                                 }
                             }
                             VolMode.Volume -> {
+                                volShift = p.y - startY // ruler slides with the finger
                                 // Up = louder, so flip the sign of the downward travel.
                                 val now = ((startY - p.y) / (VOLUME_TRAVEL.toPx() / currentMax.coerceAtLeast(1))).toInt()
                                 while (steps < now) { steps++; currentOnVolumeStep(1); haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
@@ -151,9 +158,9 @@ fun VolumeButton(
                 drawHoldMenu(radius, TwoParts, menuIcons, pop)
             }
             VolMode.Volume -> {
-                // Like the sketch: the button, plus a curved bar on its right.
-                drawCircle(Color.Black, radius)
-                drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+                // Tick ruler in place of the button (same as the time scrub), plus a curved
+                // bar on its right that shows the volume level.
+                drawTickRuler(radius, volShift)
                 val arcRadius = radius * 2.2f
                 val box = Size(arcRadius * 2, arcRadius * 2)
                 val topLeft = center - Offset(arcRadius, arcRadius)
@@ -170,6 +177,8 @@ fun VolumeButton(
             VolMode.Idle, VolMode.Timer -> {
                 drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+                // Hint: up = volume, down = sleep timer.
+                if (mode == VolMode.Idle) drawMenuHints(radius, TwoParts, menuIcons)
             }
         }
     }

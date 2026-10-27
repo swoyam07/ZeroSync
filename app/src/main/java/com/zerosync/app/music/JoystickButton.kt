@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -50,7 +51,7 @@ private val PICKER_STEP = 22.dp // small finger moves change the folder (was 48)
 
 /**
  * One small round button with no icon. A tap does nothing.
- * 1. Start swiping (no hold): a round menu opens (centre circle + 4 parts: up, down, left, right).
+ * 1. Hold still (long-press): a round menu opens (centre circle + 4 parts: up, down, left, right).
  * 2. Still holding, drag into a part:
  *    - Up: song mode turns on and a dial appears. Circle your finger: every [STEP_DEGREES]
  *      = [onUpTick] (+1 clockwise, -1 counter-clockwise) with a vibration. Lift = [onUpRelease].
@@ -101,6 +102,7 @@ fun JoystickButton(
         rememberVectorPainter(ZsIcons.Play),
     )
     var markerDegrees by remember { mutableFloatStateOf(0f) }
+    var seekShift by remember { mutableFloatStateOf(0f) } // time scrub: finger travel in px (down = +)
 
     Canvas(
         modifier
@@ -113,14 +115,17 @@ fun JoystickButton(
 
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    // No hold: the menu opens as soon as the finger starts moving (swipe).
-                    // Lifting without moving (a tap) does nothing.
-                    var moved = false
-                    while (!moved) {
-                        val change = awaitPointerEvent().changes.first()
-                        if (!change.pressed) return@awaitEachGesture
-                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                    }
+                    // Hold: the menu opens only after the finger stays still for a long-press.
+                    // A tap, or moving before that, does nothing.
+                    val held = withTimeoutOrNull(HOLD_MILLIS) {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.first()
+                            if (!change.pressed) return@withTimeoutOrNull false
+                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
+                        }
+                        @Suppress("UNREACHABLE_CODE") false
+                    } == null // timed out = finger held still long enough
+                    if (!held) return@awaitEachGesture
 
                     mode = Mode.Menu
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -165,6 +170,7 @@ fun JoystickButton(
                                 } else if (part == SwipeDirection.Left) {
                                     mode = Mode.Seek
                                     pickerStartY = p.y
+                                    seekShift = 0f
                                     currentOnLeftStart()
                                 } else {
                                     currentOnSwipe(part)
@@ -201,7 +207,10 @@ fun JoystickButton(
                                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 }
                             }
-                            Mode.Seek -> currentOnLeftMove((pickerStartY - p.y) / SEEK_TRAVEL.toPx())
+                            Mode.Seek -> {
+                                seekShift = p.y - pickerStartY // ruler slides with the finger
+                                currentOnLeftMove((pickerStartY - p.y) / SEEK_TRAVEL.toPx())
+                            }
                             Mode.Idle -> Unit
                         }
                     }
@@ -226,34 +235,41 @@ fun JoystickButton(
                 drawHoldMenu(radius, FourParts, menuIcons, pop)
             }
             Mode.Dial -> {
+                // Knob look (like the reference): dark track ring cut into 4, a glowing arc that
+                // follows the finger, and a raised knob in the middle.
+                val trackR = bigRadius * 0.82f
+                val trackW = bigRadius * 0.22f
+                val ringBox = androidx.compose.ui.geometry.Size(trackR * 2, trackR * 2)
+                val ringTopLeft = center - Offset(trackR, trackR)
                 drawCircle(Color.Black, bigRadius)
-                drawCircle(outline, bigRadius, style = Stroke(1.5.dp.toPx()))
-                for (i in 0 until 12) {
-                    val a = (i * STEP_DEGREES) * PI.toFloat() / 180f
+                drawCircle(Color(0xFF1C1C1C), trackR, style = Stroke(trackW))
+                for (k in 0 until 4) { // thin black cuts between the 4 track parts
+                    val a = (45f + k * 90f) * PI.toFloat() / 180f
                     val dir = Offset(cos(a), sin(a))
-                    drawLine(line, center + dir * (bigRadius - 12.dp.toPx()), center + dir * (bigRadius - 4.dp.toPx()), strokeWidth = 2.dp.toPx())
+                    drawLine(Color.Black, center + dir * (trackR - trackW / 2), center + dir * (trackR + trackW / 2), strokeWidth = 2.dp.toPx())
                 }
-                val m = (markerDegrees - 90f) * PI.toFloat() / 180f
-                drawCircle(ZsColors.Primary, radius = 8.dp.toPx(), center = center + Offset(cos(m), sin(m)) * (bigRadius - 24.dp.toPx()))
+                // Glow arc centred on the finger: soft wide arc under a bright thin one.
+                val at = markerDegrees - 90f
+                drawArc(ZsColors.Primary.copy(alpha = 0.25f), at - 35f, 70f, false, ringTopLeft, ringBox, style = Stroke(trackW))
+                drawArc(ZsColors.Primary, at - 30f, 60f, false, ringTopLeft, ringBox, style = Stroke(trackW * 0.45f))
+                // Raised knob: lighter top edge, dark body, small dark centre.
+                val knobR = bigRadius * 0.55f
+                drawCircle(Brush.verticalGradient(listOf(Color(0xFF4A4A4A), Color(0xFF111111)), center.y - knobR, center.y + knobR), knobR)
+                drawCircle(Brush.verticalGradient(listOf(Color(0xFF262626), Color(0xFF0A0A0A)), center.y - knobR, center.y + knobR), knobR - 2.dp.toPx())
+                drawCircle(Color(0xFF050505), knobR * 0.45f)
+                drawCircle(line, knobR * 0.45f, style = Stroke(1.dp.toPx()))
             }
-            // Time scrub (after swiping up): a slim gray up/down bar through the button, so it's
-            // clear the finger now moves up and down. Only shown in this mode, not by default.
+            // Time scrub (after swiping up): a tick ruler in place of the button that slides with the
+            // finger (like a tape measure). The red line at the middle = "you are here".
             Mode.Seek -> {
-                val half = radius * 3.2f
-                val w = radius * 0.45f // slim bar
-                drawRoundRect(
-                    Color(0xFF3A3A3A),
-                    topLeft = Offset(center.x - w / 2, center.y - half),
-                    size = androidx.compose.ui.geometry.Size(w, half * 2),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2),
-                )
-                drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
-                drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+                drawTickRuler(radius, seekShift)
             }
             // Picker: the folder boxes are drawn by the screen; the button stays plain.
             Mode.Idle, Mode.Picker -> {
                 drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1A1A), Color.Black)), radius)
                 drawCircle(outline, radius - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+                // Hint: up = time, right = song, down = folder, left = play.
+                if (mode == Mode.Idle) drawMenuHints(radius, FourParts, menuIcons)
             }
         }
     }

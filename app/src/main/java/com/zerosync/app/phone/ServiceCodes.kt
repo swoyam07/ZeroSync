@@ -1,6 +1,7 @@
 package com.zerosync.app.phone
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,19 +36,24 @@ val ServiceCodes: Map<Carrier, List<Pair<String, String>>> = mapOf(
     ),
 )
 
-/** Small pill button in the network color, e.g. "NTC" (blue) / "Ncell" (purple). */
+/** Network codes button, e.g. "*# NTC ›" (blue outline) / "*# Ncell ›" (purple outline). */
 @Composable
 fun NetworkButton(carrier: Carrier, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
-        carrier.label,
-        color = Color.White,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = modifier
+    // Looks like a button, not a SIM tag: dark pill, network-colour outline, a "*#" code mark
+    // in front and a "›" after (= opens that network's code list).
+    androidx.compose.foundation.layout.Row(
+        modifier
             .clip(RoundedCornerShape(50))
-            .background(Color(carrier.color))
+            .background(ZsColors.Surface)
+            .border(1.dp, Color(carrier.color), RoundedCornerShape(50))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
+            .padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text("*#", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
+        Text(carrier.label, color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 6.dp))
+        Text("›", color = ZsColors.Secondary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
+    }
 }
 
 /** List of that network's codes; tap one = dial it from that network's SIM. */

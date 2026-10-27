@@ -132,17 +132,14 @@ private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack
     val list by produceState<List<Pair<Conversation, String>>?>(null, SmsStore.version) {
         value = withContext(Dispatchers.IO) { SmsStore.conversations(context).map { it to nameOf(context, it.address) } }
     }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
-        TopBar("Messages", onBack) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable(onClick = onNew), contentAlignment = Alignment.Center) {
-                Text("+", color = Color.Black, style = MaterialTheme.typography.titleLarge)
-            }
-        }
+        TopBar("Messages", onBack)
         val items = list
         when {
             items == null -> Unit
             items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No messages", color = ZsColors.Secondary) }
-            else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+            else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) { // room so the + never covers the last chat
                 items(items, key = { it.first.threadId }) { (conv, name) ->
                     Row(
                         // Tap = open; hold = delete this whole chat (contact stays saved).
@@ -160,6 +157,15 @@ private fun ConversationList(onOpen: (String) -> Unit, onNew: () -> Unit, onBack
                 }
             }
         }
+    }
+    // New message: round "+" at the bottom right, easy to reach with the thumb.
+    Box(
+        Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
+            .size(56.dp).clip(CircleShape).background(ZsColors.Tertiary).clickable(onClick = onNew),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("+", color = Color.Black, style = MaterialTheme.typography.headlineSmall)
+    }
     }
 }
 

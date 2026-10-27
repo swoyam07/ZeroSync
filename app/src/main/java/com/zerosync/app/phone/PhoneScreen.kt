@@ -220,10 +220,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NetworkButton(Carrier.Ntc, { codesFor = Carrier.Ntc })
                     NetworkButton(Carrier.Ncell, { codesFor = Carrier.Ncell })
-                    // Favorites (↑ → ↓ ← spots for the call button drag).
-                    Text("★", color = Color.White, style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface)
-                            .clickable { favOpen = true }.padding(horizontal = 14.dp, vertical = 5.dp))
+                    // No ★ button: favorites open by dragging the call button to an empty spot.
                 }
             }
             Box(contentAlignment = Alignment.TopEnd) {
@@ -382,6 +379,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 else if (hasCallPermission(context)) dial(n, bestSimFor(context, n, sims))
                 else callPermission.launch(Manifest.permission.CALL_PHONE)
             },
+            onFavoritesSetup = { favOpen = true },
         )
     }
 }
@@ -449,6 +447,7 @@ private fun PhoneTabs(
     sims: List<SimCard> = emptyList(),
     typed: String = "",
     onFavorite: (FavSlot) -> Unit = {},
+    onFavoritesSetup: () -> Unit = {},
 ) {
     // Nudged a bit lower (offset), closer to the nav strip.
     // Same width and columns as the number keys, so Contacts sits under 1-4-7-*, Call under
@@ -469,12 +468,13 @@ private fun PhoneTabs(
                     // from YOUR SIM on the same network (NTC→NTC, Ncell→Ncell), else your default.
                     val context = LocalContext.current
                     val net = carrierOf(typed)
-                    // Tap = call typed number; drag ↑ → ↓ ← = call that favorite (no hold needed).
+                    // Tap = call typed number; drag ↑ → ↓ ← = call that favorite; hold still = edit favorites.
                     FavCallButton(
                         color = net?.let { Color(it.color) } ?: CallGreen,
                         size = TabSlotHeight,
                         onTap = { onCall(bestSimFor(context, typed, sims)) }, // unknown network + 2 SIMs = asks which SIM
                         onFavorite = onFavorite,
+                        onHold = onFavoritesSetup, // hold still = edit favorites
                     )
                 }
                 return@forEach

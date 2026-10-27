@@ -187,15 +187,15 @@ fun SpamBadge(size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) 
     androidx.compose.foundation.Canvas(modifier.size(size).semantics { contentDescription = "Spam" }) {
         val r = this.size.minDimension / 2f
         drawCircle(Color(0xFFE53935), r)
-        val w = r * 0.26f // stroke width of the "!"
-        // Bar: from 28% to 62% of the height; dot at 76%.
+        val w = r * 0.20f // stroke width of the "!"
+        // Bar: from 34% to 56% of the height; dot at 70% (a smaller "!" inside the circle).
         drawLine(
             Color.White,
-            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.27f),
-            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.60f),
+            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.34f),
+            androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.56f),
             strokeWidth = w,
             cap = androidx.compose.ui.graphics.StrokeCap.Round,
         )
-        drawCircle(Color.White, w * 0.62f, androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.76f))
+        drawCircle(Color.White, w * 0.62f, androidx.compose.ui.geometry.Offset(center.x, this.size.height * 0.70f))
     }
 }

@@ -33,6 +33,7 @@ import com.zerosync.app.ui.ZsIcons
 import com.zerosync.app.ui.theme.ZsColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
@@ -42,13 +43,16 @@ import kotlin.math.sin
  * - Tap: [onTap] (call the typed number).
  * - Drag (no hold needed): a 4-way menu opens around it (↑ → ↓ ←), each pad showing that favorite's first
  *   letter (or number end). Drag onto a pad and let go = [onFavorite]. Let go in the middle = cancel.
+ * - Hold still (long-press): [onHold] (open favorites setup).
+ * At rest, the 4 labels sit dimmed around the button as a hint that the drag exists.
  */
 @Composable
-fun FavCallButton(color: Color, size: Dp, onTap: () -> Unit, onFavorite: (FavSlot) -> Unit) {
+fun FavCallButton(color: Color, size: Dp, onTap: () -> Unit, onFavorite: (FavSlot) -> Unit, onHold: () -> Unit = {}) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val currentTap by rememberUpdatedState(onTap)
     val currentFav by rememberUpdatedState(onFavorite)
+    val currentHold by rememberUpdatedState(onHold)
     var open by remember { mutableStateOf(false) }
     var hovered by remember { mutableStateOf<FavSlot?>(null) }
     // Pad labels: first letter of the saved name, else last 2 digits; "+" when empty.
@@ -70,13 +74,25 @@ fun FavCallButton(color: Color, size: Dp, onTap: () -> Unit, onFavorite: (FavSlo
                     val inner = this.size.width / 2f
                     awaitEachGesture {
                         val down = awaitFirstDown()
-                        // No hold: lift without moving = tap (call typed number);
-                        // start dragging = the favorites menu opens right away.
-                        var dragged = false
-                        while (!dragged) {
-                            val c = awaitPointerEvent().changes.first()
-                            if (!c.pressed) { currentTap(); return@awaitEachGesture }
-                            if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) dragged = true
+                        // Lift without moving = tap (call typed number); start dragging = the
+                        // favorites menu opens right away; hold still = favorites setup.
+                        val dragged = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val c = awaitPointerEvent().changes.first()
+                                if (!c.pressed) return@withTimeoutOrNull false
+                                if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull true
+                            }
+                            @Suppress("UNREACHABLE_CODE") false
+                        }
+                        when (dragged) {
+                            false -> { currentTap(); return@awaitEachGesture }
+                            null -> { // held still
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                currentHold()
+                                while (awaitPointerEvent().changes.first().pressed) Unit // wait for lift
+                                return@awaitEachGesture
+                            }
+                            true -> Unit
                         }
                         open = true
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -124,9 +140,23 @@ fun FavCallButton(color: Color, size: Dp, onTap: () -> Unit, onFavorite: (FavSlo
                     }
                 }
             }
+            else {
+                // Hint at rest: the 4 labels, dimmed, just outside the button (↑ → ↓ ←).
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    this.color = Color(0xFF595959).toArgb()
+                    textSize = 13.dp.toPx()
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+                val gap = r + 14.dp.toPx()
+                FavSlot.entries.forEach { s ->
+                    val a = Math.toRadians(s.angle.toDouble())
+                    val p = center + Offset(cos(a).toFloat(), sin(a).toFloat()) * gap
+                    drawContext.canvas.nativeCanvas.drawText(labels[s] ?: "+", p.x, p.y - (paint.descent() + paint.ascent()) / 2, paint)
+                }
+            }
             drawCircle(color, r)
         }
-        Icon(ZsIcons.Phone, contentDescription = "Call (hold for favorites)", tint = Color.White, modifier = Modifier.size(size * 0.47f))
+        Icon(ZsIcons.Phone, contentDescription = "Call (drag for favorites, hold to edit them)", tint = Color.White, modifier = Modifier.size(size * 0.47f))
     }
 }
 
