@@ -26,6 +26,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -297,22 +300,29 @@ private fun CameraView(vm: CameraViewModel) {
 private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf) // QR has its own button left of the shutter
 
 /**
- * Frosted dark panel with the 3 document modes (round icon + small caps label).
- * Selected = white circle with black icon and white label. Tap one, or swipe sideways
- * inside the panel: left = next mode, right = previous.
+ * iPhone-style mode strip: the mode names in one row, the chosen one white and centred, the
+ * others gray. Picking a mode slides the row (200 ms, user-approved). Tap a name, or swipe
+ * sideways: left = next mode, right = previous. In QR mode none is highlighted.
  */
 @Composable
 private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modifier: Modifier = Modifier) {
-    val index = CameraModes.indexOf(selected).coerceAtLeast(0)
+    val found = CameraModes.indexOf(selected)
+    var lastIndex by remember { mutableStateOf(0) } // QR: keep the row where it was
+    if (found >= 0) lastIndex = found
+    val index = lastIndex
     val currentIndex by androidx.compose.runtime.rememberUpdatedState(index)
     val currentOnSelect by androidx.compose.runtime.rememberUpdatedState(onSelect)
-    val shape = RoundedCornerShape(28.dp)
-    Row(
+    val slot = 104.dp // width of one mode name
+    // Row shift so the chosen name sits in the middle; animated = the slide.
+    val shift by androidx.compose.animation.core.animateDpAsState(
+        targetValue = -(slot * index + slot / 2),
+        animationSpec = androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "modeSlide",
+    )
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(Color(0xCC1C1C1C))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
+            .height(48.dp)
             .pointerInput(Unit) {
                 var dx = 0f
                 detectHorizontalDragGestures(
@@ -327,36 +337,28 @@ private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modi
                         if (next != currentIndex) currentOnSelect(CameraModes[next])
                     },
                 ) { change, amount -> change.consume(); dx += amount }
-            }
-            .padding(vertical = 14.dp),
+            },
     ) {
-        CameraModes.forEach { mode ->
-            val active = mode == selected
-            Column(
-                Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onSelect(mode) }.padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
+        val half = maxWidth / 2
+        Row(Modifier.offset(x = half + shift).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+            CameraModes.forEach { mode ->
+                val active = mode == selected
                 Box(
-                    Modifier.size(52.dp).clip(CircleShape).background(if (active) Color.White else Color.White.copy(alpha = 0.08f)),
+                    Modifier.width(slot).fillMaxHeight().clip(RoundedCornerShape(12.dp)).clickable { onSelect(mode) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    val icon = when (mode) {
-                        CameraMode.Passport -> ZsIcons.Contact
-                        CameraMode.Id -> ZsIcons.Badge
-                        CameraMode.Qr -> ZsIcons.Qr
-                        else -> ZsIcons.Pdf
-                    }
-                    Icon(icon, contentDescription = null, tint = if (active) Color.Black else Color.White, modifier = Modifier.size(24.dp))
+                    Text(
+                        mode.label.uppercase(),
+                        color = if (active) Color.White else ZsColors.Secondary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                        letterSpacing = 1.5.sp,
+                    )
                 }
-                Text(
-                    mode.label.uppercase(),
-                    color = if (active) Color.White else ZsColors.Secondary,
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
             }
         }
+        // Small white dot under the middle = "this one".
+        if (found >= 0) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).size(5.dp).clip(CircleShape).background(Color.White))
     }
 }
 

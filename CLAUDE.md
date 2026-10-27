@@ -23,9 +23,11 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
   Exception: Camera's per-file Public switch copies a file to shared storage (user-approved).
 - Ask before adding ANY dependency, SDK, or Gradle plugin: use the `package-decision` skill.
 - Features with real trade-offs: ask priority first (see `package-decision` skill).
-- No animations by default. Approved exceptions: 120 ms pop-in of the music hold menu; 1.2 s count-up of the music time ring on open (display only); call answer-bar handle glide (≤180 ms). No background work, services, or polling unless approved (approved: alarm scheduling + boot re-schedule + ringing service, see docs/features/alarm.md).
+- No animations by default. Approved exceptions: 120 ms pop-in of the music hold menu; 1.2 s count-up of the music time ring on open (display only); call answer-bar handle glide (≤180 ms); 200 ms slide of the camera mode strip (Passport · ID · PDF). No background work, services, or polling unless approved (approved: alarm scheduling + boot re-schedule + ringing service, see docs/features/alarm.md).
 - Prefer Android/Jetpack built-ins over third-party packages.
 - Adaptive layouts only; never hardcode screen pixel sizes.
+- Portrait only: every activity has `screenOrientation="portrait"`; never use auto-rotate (user rule).
+  Only exception: the PowerPoint slideshow forces fixed landscape (no sensor) while open.
 - Handle backgrounding, process death, config changes, low memory.
 
 ## Where things live (read only what the task needs)

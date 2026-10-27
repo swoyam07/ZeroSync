@@ -331,14 +331,15 @@ private fun decodeSampled(bytes: ByteArray, maxSide: Int): Bitmap? {
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }
 
-// ---------- PowerPoint: sideways automatically, one slide per screen ----------
+// ---------- PowerPoint: sideways (fixed landscape), one slide per screen ----------
 
 @Composable
 private fun SlidesView(pres: Presentation) {
-    // Turn the screen sideways while a slideshow is open (no tilt sensor), and put it back after.
+    // Only exception to portrait-only: turn the screen sideways (fixed landscape, NOT the tilt
+    // sensor / auto-rotate) while a slideshow is open, and put it back to portrait after.
     val activity = LocalActivity.current
     DisposableEffect(activity) {
-        val before = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        val before = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         onDispose { activity?.requestedOrientation = before }
     }

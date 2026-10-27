@@ -72,6 +72,7 @@
         <!-- Exported only because the launcher must start it. -->
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true">
             <intent-filter>
@@ -84,6 +85,7 @@
              default Phone app role (allowed by the project rules). -->
         <activity
             android:name=".phone.DialerActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:taskAffinity=".dialer">
             <intent-filter>
@@ -106,6 +108,7 @@
         <!-- Call screen: over the lock screen, turns the screen on. Not exported. -->
         <activity
             android:name=".phone.CallActivity"
+            android:screenOrientation="portrait"
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
@@ -145,6 +148,7 @@
              protected by a permission only the system holds. -->
         <activity
             android:name=".sms.MessagesActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:taskAffinity=".messages"
             android:windowSoftInputMode="adjustResize">
@@ -200,10 +204,12 @@
              None exported (system boot broadcasts still reach the receiver). -->
         <activity
             android:name=".alarm.TimeActivity"
+            android:screenOrientation="portrait"
             android:exported="false"
             android:taskAffinity=".time" />
         <activity
             android:name=".alarm.AlarmActivity"
+            android:screenOrientation="portrait"
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
