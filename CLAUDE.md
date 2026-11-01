@@ -27,7 +27,8 @@ The developer is new to Kotlin/Android: explain briefly, keep code simple.
 - Prefer Android/Jetpack built-ins over third-party packages.
 - Adaptive layouts only; never hardcode screen pixel sizes.
 - Portrait only: every activity has `screenOrientation="portrait"`; never use auto-rotate (user rule).
-  Only exception: the PowerPoint slideshow forces fixed landscape (no sensor) while open.
+  Exceptions (fixed landscape, never the sensor): the PowerPoint slideshow while open; the Gallery
+  feed Rotate button while on (default off, user-toggled).
 - Handle backgrounding, process death, config changes, low memory.
 
 ## Where things live (read only what the task needs)

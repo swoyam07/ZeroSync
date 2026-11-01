@@ -11,6 +11,9 @@ import kotlinx.coroutines.launch
 /** Shuffle = random feed of every video. Folders = browse phone folders, play in order. */
 enum class GalleryMode { Shuffle, Folders }
 
+/** What the feeds and folders show. Default each time the app starts: Videos. */
+enum class MediaFilter(val label: String) { Videos("Videos only"), Photos("Photos only"), Both("Videos and photos") }
+
 /**
  * An open vertical video feed (Folders mode): the playlist, where to start,
  * and the folder's videos in their normal order (to rebuild when the order is toggled).
@@ -39,7 +42,62 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     var feed by mutableStateOf<Feed?>(null)
         private set
 
-    private var allVideos = emptyList<MediaItem>()
+    private var allVideos = emptyList<MediaItem>() // everything that passes the filter
+    private var loadedVideos = emptyList<MediaItem>()
+    private var loadedPhotos = emptyList<MediaItem>()
+
+    /** Shuffle only: Videos / Photos / Both. Not saved: every app start begins with Videos only. */
+    var filter by mutableStateOf(MediaFilter.Videos)
+        private set
+
+    /** Cycle Videos → Photos → Both for Shuffle. Folders are not affected. */
+    fun cycleFilter() {
+        filter = next(filter)
+        applyFilter(force = true)
+    }
+
+    /** Inside an open folder: its own filter. Every folder opens on Both (all its content). */
+    var folderFilter by mutableStateOf(MediaFilter.Both)
+        private set
+
+    fun cycleFolderFilter() {
+        folderFilter = next(folderFilter)
+        val folder = currentFolder ?: return
+        val items = filtered(folder.videos, folderFilter)
+        val start = (if (inOrder) items.firstOrNull() else items.randomOrNull())
+        feed = if (start == null) Feed(emptyList(), 0, emptyList()) else folderFeed(start, items)
+        feedIndex = feed!!.startIndex
+        feedVersion++
+    }
+
+    private fun next(f: MediaFilter) = MediaFilter.entries[(f.ordinal + 1) % MediaFilter.entries.size]
+
+    private fun filtered(items: List<MediaItem>, f: MediaFilter) = when (f) {
+        MediaFilter.Videos -> items.filter { it.isVideo }
+        MediaFilter.Photos -> items.filter { !it.isVideo }
+        MediaFilter.Both -> items
+    }
+
+    /**
+     * False until the user plays a video or swipes in the feed. While false, the video on
+     * screen stays paused. Reset every time Gallery is opened from another tab.
+     */
+    var playStarted by mutableStateOf(false)
+        private set
+
+    fun startPlaying() { playStarted = true }
+
+    /** Entering or leaving Gallery via the nav bar: the next first video starts paused. */
+    fun resetToPaused() { playStarted = false; rotated = false }
+
+    /**
+     * Rotate button: true = screen turned sideways (fixed landscape, no motion sensor), until the
+     * user turns it off. Off by default; leaving Gallery turns it off.
+     */
+    var rotated by mutableStateOf(false)
+        private set
+
+    fun toggleRotate() { rotated = !rotated }
 
     // Feed settings survive closing the app (private prefs; backups are off, nothing leaves).
     private val settings = app.getSharedPreferences("gallery_settings", android.content.Context.MODE_PRIVATE)
@@ -81,21 +139,34 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         loading = true
         viewModelScope.launch {
             try {
-                val videos = repo.loadVideos()
-                // Reshuffle only when the videos actually changed, so returning to
-                // the app doesn't jump the Shuffle feed to a different video.
-                val changed = videos.map { it.uri }.toSet() != allVideos.map { it.uri }.toSet()
-                if (changed) {
-                    allVideos = videos
-                    shuffleFeed = if (inOrder) videos else videos.shuffled()
-                    shuffleIndex = 0
-                    folders = repo.videoFolders(videos)
-                    currentFolder = currentFolder?.let { open -> folders.find { it.bucketId == open.bucketId } }
-                }
+                loadedVideos = repo.loadVideos()
+                loadedPhotos = repo.loadPhotos()
+                applyFilter(force = false)
             } finally {
                 loading = false
             }
         }
+    }
+
+    /**
+     * Rebuild the feed + folders from what passes the filter. Without [force], only when the set
+     * of items changed, so returning to the app doesn't jump the Shuffle feed to another item.
+     */
+    private fun applyFilter(force: Boolean) {
+        val everything = (loadedVideos + loadedPhotos).sortedByDescending { it.dateAdded }
+        // Folders always hold ALL content (videos + photos); the Shuffle filter never touches them.
+        val newFolders = repo.videoFolders(everything)
+        if (newFolders.map { it.bucketId to it.videos.size } != folders.map { it.bucketId to it.videos.size }) {
+            folders = newFolders
+            currentFolder = currentFolder?.let { open -> folders.find { it.bucketId == open.bucketId } }
+        }
+        val media = filtered(everything, filter)
+        val changed = force || media.map { it.uri }.toSet() != allVideos.map { it.uri }.toSet()
+        if (!changed) return
+        allVideos = media
+        shuffleFeed = if (inOrder) media else media.shuffled()
+        shuffleIndex = 0
+        if (force) feedVersion++
     }
 
     /** Append the next cycle (all videos: in order, or a new random order) to the Shuffle feed. */
@@ -119,6 +190,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun openFolder(folder: VideoFolder) {
         currentFolder = folder
+        folderFilter = MediaFilter.Both // a folder always opens showing everything
         val first = (if (inOrder) folder.videos.firstOrNull() else folder.videos.randomOrNull()) ?: return
         openVideo(first, folder.videos)
     }

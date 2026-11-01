@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +78,12 @@ fun GalleryScreen(vm: GalleryViewModel) {
         PermissionPrompt { permissionLauncher.launch(videoPermissions()) }
         return
     }
+    // Had video access from before photos were supported: ask for photos when they're wanted.
+    androidx.compose.runtime.LaunchedEffect(vm.filter) {
+        if (vm.filter != MediaFilter.Videos && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED
+        ) permissionLauncher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES))
+    }
 
     // Swipe sideways anywhere on Gallery: left = Folders, right = Shuffle.
     // Vertical swipes still go to the video feed / lists.
@@ -105,9 +112,25 @@ fun GalleryScreen(vm: GalleryViewModel) {
 @Composable
 private fun ShuffleMode(vm: GalleryViewModel) {
     if (vm.shuffleFeed.isEmpty()) {
-        Column(Modifier.fillMaxSize()) {
-            ModeSwitch(vm, Modifier.align(Alignment.CenterHorizontally).padding(top = ModeSwitchTop))
-            CenterMessage(if (vm.loading) "Loading…" else "No videos found")
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                ModeSwitch(vm, Modifier.align(Alignment.CenterHorizontally).padding(top = ModeSwitchTop, bottom = 8.dp))
+                // Always visible (above the message, which fills the rest), so an empty filter can be changed back.
+                FilterButton(vm, Modifier.align(Alignment.CenterHorizontally))
+                CenterMessage(if (vm.loading) "Loading…" else "Nothing found (${vm.filter.label.lowercase()})")
+            }
+            // Same right-side rail as in the feed, so the videos/photos bead is where the user expects it.
+            FeedToggles(
+                autoScroll = vm.autoScroll,
+                inOrder = vm.inOrder,
+                onToggleAutoScroll = vm::toggleAutoScroll,
+                onToggleOrder = vm::toggleOrder,
+                filter = vm.filter,
+                onCycleFilter = vm::cycleFilter,
+                modifier = Modifier
+                    .align(androidx.compose.ui.BiasAlignment(horizontalBias = 1f, verticalBias = 0.3f))
+                    .padding(end = 16.dp),
+            )
         }
         return
     }
@@ -124,6 +147,12 @@ private fun ShuffleMode(vm: GalleryViewModel) {
             onClose = null,
             onNearEnd = vm::extendShuffleFeed,
             topCenter = { ModeSwitch(vm) },
+            filter = vm.filter,
+            onCycleFilter = vm::cycleFilter,
+            playStarted = vm.playStarted,
+            onStartPlaying = vm::startPlaying,
+            rotated = vm.rotated,
+            onToggleRotate = vm::toggleRotate,
         )
     }
 }
@@ -143,6 +172,12 @@ private fun FoldersMode(vm: GalleryViewModel) {
                 onToggleOrder = vm::toggleOrder,
                 onPageSettled = vm::onFeedPage,
                 onClose = vm::closeFeed,
+                filter = vm.folderFilter, // the folder's own filter (opens on Both)
+                onCycleFilter = vm::cycleFolderFilter,
+                playStarted = vm.playStarted,
+                onStartPlaying = vm::startPlaying,
+                rotated = vm.rotated,
+                onToggleRotate = vm::toggleRotate,
             )
         }
         return
@@ -159,7 +194,7 @@ private fun FoldersMode(vm: GalleryViewModel) {
                 VideoGrid(folder.videos) { vm.openVideo(it, folder.videos) }
             }
             vm.loading && vm.folders.isEmpty() -> CenterMessage("Loading…")
-            vm.folders.isEmpty() -> CenterMessage("No folders with videos found")
+            vm.folders.isEmpty() -> CenterMessage("No folders with videos or photos found")
             else -> FolderList(vm.folders, onOpen = vm::openFolder)
         }
     }
@@ -176,6 +211,18 @@ private fun ModeSwitch(vm: GalleryViewModel, modifier: Modifier = Modifier) {
     )
 }
 
+/** Text pill: "Videos only" / "Photos only" / "Videos and photos". Tap = next choice. */
+@Composable
+private fun FilterButton(vm: GalleryViewModel, modifier: Modifier = Modifier) {
+    Text(
+        vm.filter.label,
+        color = Color.White,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = modifier.clip(RoundedCornerShape(50)).background(ZsColors.Surface)
+            .clickable(onClick = vm::cycleFilter).padding(horizontal = 14.dp, vertical = 6.dp),
+    )
+}
+
 @Composable
 private fun VideoGrid(items: List<MediaItem>, onClick: (MediaItem) -> Unit) {
     LazyVerticalGrid(
@@ -188,7 +235,7 @@ private fun VideoGrid(items: List<MediaItem>, onClick: (MediaItem) -> Unit) {
         items(items, key = { it.uri.toString() }) { item ->
             Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(10.dp)).clickable { onClick(item) }) {
                 Thumbnail(item.uri, Modifier.fillMaxSize())
-                Icon(
+                if (item.isVideo) Icon(
                     ZsIcons.Play,
                     contentDescription = "Video",
                     tint = Color.White,
@@ -254,7 +301,7 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "ZeroSync needs access to your videos to show them.\n" +
+            "ZeroSync needs access to your videos and photos to show them.\n" +
                 "Nothing leaves your phone: this app has no internet access.",
             color = ZsColors.OnSurface,
             textAlign = TextAlign.Center,
@@ -279,9 +326,10 @@ private fun CenterMessage(text: String) {
 private fun videoPermissions(): Array<String> = when {
     Build.VERSION.SDK_INT >= 34 -> arrayOf(
         Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
     )
-    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_VIDEO)
+    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_IMAGES)
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 }
 

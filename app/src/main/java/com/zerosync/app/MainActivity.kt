@@ -89,8 +89,8 @@ private fun ZeroSyncApp() {
     // Music pauses while in Gallery and continues when you leave Gallery (any tab).
     var previousTab by remember { mutableStateOf(tab) }
     LaunchedEffect(tab) {
-        if (previousTab != AppTab.Gallery && tab == AppTab.Gallery) music.onEnterGallery()
-        if (previousTab == AppTab.Gallery && tab != AppTab.Gallery) music.onLeaveGallery()
+        if (previousTab != AppTab.Gallery && tab == AppTab.Gallery) { music.onEnterGallery(); gallery.resetToPaused() } // first video starts paused
+        if (previousTab == AppTab.Gallery && tab != AppTab.Gallery) { music.onLeaveGallery(); gallery.resetToPaused() } // reset early so the next visit starts paused
         previousTab = tab
     }
     val files: FilesViewModel = viewModel()
