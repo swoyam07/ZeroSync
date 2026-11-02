@@ -19,10 +19,16 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** [title] = what the user sees. Stored names stay "Personal"/"Home" so saved contacts still load. */
-enum class NumberLabel(val title: String) { Personal("Friends"), Home("Family"), Work("Work") }
+/**
+ * [title] = what the user sees. Stored names stay "Personal"/"Home" so saved contacts still load.
+ * Order = order in the picker; Service first because it's the default for new numbers.
+ */
+enum class NumberLabel(val title: String) {
+    Service("Service"), Main("Main"), Food("Food"), Company("Company"), Personal("Friends"), Home("Family"), Work("Work"),
+}
 
-data class ContactNumber(val number: String, val label: NumberLabel = NumberLabel.Personal)
+/** New numbers start as Service (user's choice); it can be changed in the editor. */
+data class ContactNumber(val number: String, val label: NumberLabel = NumberLabel.Service)
 
 /** A private contact. [id] is empty for a new, unsaved one. */
 data class Contact(

@@ -95,6 +95,8 @@ fun ContactsList(
     modifier: Modifier = Modifier,
     sims: List<SimCard> = emptyList(),
     onCallWith: (String, SimCard) -> Unit = { n, _ -> onCall(n) },
+    /** Hold a call button = choose SIM 1 / SIM 2. */
+    onLongCall: (String) -> Unit = onCall,
     unreadMessages: Int = 0,
     onMessages: () -> Unit = {},
 ) {
@@ -179,7 +181,7 @@ fun ContactsList(
                         // network color (NTC blue, Ncell purple, black otherwise). Each calls that number from
                         // YOUR SIM on the same network (NTC→NTC, Ncell→Ncell), else your default SIM.
                         val context = LocalContext.current
-                        NumberCallCapsule(saved.map { it.number }, Modifier.padding(start = 8.dp)) { n ->
+                        NumberCallCapsule(saved.map { it.number }, Modifier.padding(start = 8.dp), onLongCall = onLongCall) { n ->
                             val sim = bestSimFor(context, n, sims)
                             if (sim != null) onCallWith(n, sim) else onCall(n)
                         }
@@ -597,7 +599,7 @@ private fun PlainField(
     )
 }
 
-/** Dropdown pill: Friends (default) / Family / Work. */
+/** Dropdown pill: Service (default) / Main / Food / Company / Friends / Family / Work. */
 @Composable
 private fun LabelPicker(selected: NumberLabel, onPick: (NumberLabel) -> Unit) {
     var open by remember { mutableStateOf(false) }

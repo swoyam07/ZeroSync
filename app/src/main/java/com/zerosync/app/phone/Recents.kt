@@ -68,7 +68,13 @@ data class RecentCall(val number: String, val name: String?, val type: Int, val 
  * Read-only; nothing is copied. Tap a line = call that number back.
  */
 @Composable
-fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: Modifier = Modifier) {
+fun RecentsList(
+    onCall: (String) -> Unit,
+    onSave: (Contact) -> Unit,
+    modifier: Modifier = Modifier,
+    /** Hold the call button = choose SIM 1 / SIM 2. */
+    onLongCall: (String) -> Unit = onCall,
+) {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(hasCallLog(context)) }
     var reload by remember { mutableIntStateOf(0) }
@@ -115,6 +121,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
                             if (saved != null) onSave(saved) else choosing = localNumber(call.number)
                         }
                     },
+                    onLongCall = { if (call.number.isNotBlank()) onLongCall(call.number) },
                 ) { if (call.number.isNotBlank()) onCall(call.number) }
             }
         }
@@ -123,7 +130,7 @@ fun RecentsList(onCall: (String) -> Unit, onSave: (Contact) -> Unit, modifier: M
 
 @Composable
 /** Tapping the row does nothing (no accidental calls); the phone icon calls; hold = options. */
-private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onCall: () -> Unit) {
+private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onLongCall: () -> Unit = {}, onCall: () -> Unit) {
     val missed = call.type == CallLog.Calls.MISSED_TYPE || call.type == CallLog.Calls.REJECTED_TYPE || call.type == CallLog.Calls.BLOCKED_TYPE
     val (icon, label) = when (call.type) {
         CallLog.Calls.OUTGOING_TYPE -> ZsIcons.CallMade to "Outgoing"
@@ -165,13 +172,13 @@ private fun RecentRow(call: RecentCall, onLongClick: () -> Unit, onCall: () -> U
         }
         // Network logo (NTC / Ncell), nothing for unknown numbers.
         // Right side: one gray pill = network logo | divider | call. (Save a contact: hold the line.)
-        CallPill(call.number, onCall, Modifier.padding(start = 8.dp))
+        CallPill(call.number, onCall, Modifier.padding(start = 8.dp), onLongCall = onLongCall)
     }
 }
 
 /**
  * Save an unsaved number: "New contact", or pick an existing contact to add it to
- * (the number is added as Friends; the editor opens so you can change the label and Save).
+ * (the number is added as Service; the editor opens so you can change the label and Save).
  */
 @Composable
 private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: () -> Unit) {
@@ -225,18 +232,19 @@ private fun SaveChooser(number: String, onPick: (Contact) -> Unit, onDismiss: ()
 }
 
 /**
- * Gray rounded pill: network logo | thin divider | green phone. Tapping anywhere on it calls.
+ * Gray rounded pill: network logo | thin divider | green phone. Tap anywhere = call (matching SIM);
+ * hold = [onLongCall] (choose SIM 1 / SIM 2).
  * [roomy] = a bit more space inside (Contacts list).
  */
 @Composable
-internal fun CallPill(number: String, onCall: () -> Unit, modifier: Modifier = Modifier, roomy: Boolean = false) {
+internal fun CallPill(number: String, onCall: () -> Unit, modifier: Modifier = Modifier, roomy: Boolean = false, onLongCall: (() -> Unit)? = null) {
     val gap = if (roomy) 12.dp else 8.dp
     Row(
         modifier
             .clip(RoundedCornerShape(50))
             .background(ZsColors.Surface)
-            // The WHOLE pill (logo, divider, phone) is one call button.
-            .clickable(enabled = number.isNotBlank(), onClick = onCall)
+            // The WHOLE pill (logo, divider, phone) is one call button. Hold = pick the SIM.
+            .combinedClickable(enabled = number.isNotBlank(), onClick = onCall, onLongClick = onLongCall)
             .padding(horizontal = if (roomy) 10.dp else 6.dp, vertical = if (roomy) 2.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

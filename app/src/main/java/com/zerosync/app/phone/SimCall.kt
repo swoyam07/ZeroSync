@@ -7,6 +7,7 @@ import android.telecom.TelecomManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -118,10 +119,16 @@ fun SimLogo(sim: SimCard, modifier: Modifier = Modifier) {
 /**
  * One capsule split per number (max 3), same height as the single call pill (40 dp): each
  * segment is the number's network color (NTC dark blue, Ncell purple, black for other numbers like landlines) with a white
- * phone icon. Tap = call that number.
+ * phone icon. Tap = call that number (matching SIM); hold = choose SIM 1 / SIM 2.
  */
 @Composable
-fun NumberCallCapsule(numbers: List<String>, modifier: Modifier = Modifier, onCall: (String) -> Unit) {
+fun NumberCallCapsule(
+    numbers: List<String>,
+    modifier: Modifier = Modifier,
+    /** Hold a segment = choose SIM 1 / SIM 2 for that number. */
+    onLongCall: ((String) -> Unit)? = null,
+    onCall: (String) -> Unit,
+) {
     val shape = RoundedCornerShape(50)
     // Always the same size (one or several numbers); segments share the width equally.
     Row(
@@ -132,7 +139,8 @@ fun NumberCallCapsule(numbers: List<String>, modifier: Modifier = Modifier, onCa
             if (i > 0) Box(Modifier.width(1.5.dp).height(40.dp).background(Color.Black)) // divider
             val color = carrierOf(n)?.let { Color(it.color) } ?: Color.Black // other networks / landlines: black
             Box(
-                Modifier.weight(1f).height(40.dp).background(color).clickable { onCall(n) },
+                Modifier.weight(1f).height(40.dp).background(color)
+                    .combinedClickable(onClick = { onCall(n) }, onLongClick = onLongCall?.let { { it(n) } }),
                 contentAlignment = Alignment.Center, // phone icon centered in its segment
             ) {
                 Icon(ZsIcons.Phone, contentDescription = "Call $n", tint = Color.White, modifier = Modifier.size(18.dp))

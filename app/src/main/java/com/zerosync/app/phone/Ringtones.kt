@@ -41,7 +41,7 @@ import com.zerosync.app.music.MusicRepository
 import com.zerosync.app.ui.theme.ZsColors
 
 /**
- * Ringtone per contact category (Friends / Family / Work). Unset = phone's default ringtone.
+ * Ringtone per contact category (Service / Main / Food / Company / Friends / Family / Work). Unset = phone's default ringtone.
  * Unknown numbers always use the phone's default ringtone. Kept in private storage.
  */
 object RingtoneSettings {
@@ -115,7 +115,7 @@ object CallRinger {
     }
 }
 
-/** Dialog: Friends / Family / Work with their ringtone; tap one to change it. */
+/** Dialog: every contact category with its ringtone; tap one to change it. */
 @Composable
 fun RingtonesDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current

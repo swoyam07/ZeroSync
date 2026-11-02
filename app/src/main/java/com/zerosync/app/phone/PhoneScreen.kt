@@ -104,6 +104,10 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
     val dial: (String, SimCard?) -> Unit = { n, sim ->
         if (sim == null && sims.size >= 2) askSimFor = n else placeCall(context, n, sim)
     }
+    // Hold a call button (Recents / Contacts): always ask SIM 1 or SIM 2 (no SIM given = asks).
+    val longCall: (String) -> Unit = { n ->
+        if (hasCallPermission(context)) dial(n, null) else { number = n; phoneTab = PhoneTab.Keypad }
+    }
     val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isDefault = isDefaultDialer(context)
     }
@@ -343,6 +347,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                 },
                 onSave = { c -> editing = c },
                 modifier = Modifier.weight(1f),
+                onLongCall = { n -> longCall(n) },
             )
             PhoneTab.Contacts -> ContactsList(
                 onOpen = { editing = it },
@@ -359,6 +364,7 @@ fun PhoneScreen(startNumber: String = "", bottomPadding: androidx.compose.ui.uni
                     if (hasCallPermission(context)) dial(n, null)
                     else { number = n; phoneTab = PhoneTab.Keypad }
                 },
+                onLongCall = { n -> longCall(n) },
                 modifier = Modifier.weight(1f),
             )
         }
