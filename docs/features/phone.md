@@ -67,6 +67,10 @@ Make and receive normal SIM calls using ZeroSync's own UI instead of the system 
   unknown numbers = phone default. No sound in silent / vibrate mode or Do Not Disturb (still
   vibrates). Unreadable song falls back to the phone default. Spam never rings.
 
+- Call bar (2026-11-04): call-style notification (lock screen too) when the call screen is
+  swiped away while ringing (Decline / Answer), and for the whole answered / outgoing call
+  (timer + Hang up). Tap = full call screen again, no unlock. Gone when the call ends.
+
 ## Permissions
 CALL_PHONE, VIBRATE, READ_CALL_LOG, POST_NOTIFICATIONS, SYSTEM_ALERT_WINDOW, USE_FULL_SCREEN_INTENT (+ role). HyperOS: allow "Show on lock
 screen" and "Display pop-up windows while running in the background" for ZeroSync.

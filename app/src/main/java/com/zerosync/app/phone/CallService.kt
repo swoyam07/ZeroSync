@@ -31,6 +31,7 @@ class CallService : InCallService() {
     private val overlayWatcher = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             if (state != Call.STATE_RINGING) {
+                runCatching { showReturnBar(this@CallService) } // call bar for the rest of the call
                 CallOverlay.hide(this@CallService)
                 CallVibration.stop(this@CallService) // answered / declined
                 CallRinger.stop()
@@ -54,6 +55,7 @@ class CallService : InCallService() {
             runCatching { showIncoming() }.onFailure { CallOverlay.hide(this); openCallScreen() }
         } else {
             openCallScreen()
+            runCatching { showReturnBar(this) } // outgoing: call bar from the start
         }
     }
 
@@ -173,13 +175,69 @@ class CallService : InCallService() {
     companion object {
         private const val CHANNEL = "incoming_calls"
         private const val QUIET_CHANNEL = "incoming_calls_quiet"
+        private const val ONGOING_CHANNEL = "ongoing_call"
         private const val NOTIFICATION_ID = 1001
+
+        /**
+         * Call bar: Android's call-style card (shown on the lock screen) for a call that is still
+         * ringing after the call screen was swiped away, and for the whole of an answered /
+         * outgoing call. Tap = full call screen again (opens over the lock screen, no unlock).
+         * Same id as the incoming notification, so it replaces it and goes when the call ends.
+         * Call style needs a full-screen intent; setOnlyAlertOnce stops it popping the screen
+         * up again on each update.
+         */
+        fun showReturnBar(context: android.content.Context) {
+            CallManager.call ?: return
+            val state = CallManager.state
+            if (state == Call.STATE_DISCONNECTED || state == Call.STATE_DISCONNECTING) return
+            val ringing = state == Call.STATE_RINGING
+            val nm = context.getSystemService(NotificationManager::class.java)
+            val channel = if (ringing) CHANNEL else ONGOING_CHANNEL
+            nm.createNotificationChannel(
+                if (ringing) NotificationChannel(CHANNEL, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null) }
+                else NotificationChannel(ONGOING_CHANNEL, "Ongoing call", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    setSound(null, null); enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                },
+            )
+            val open = Intent(context, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val tap = PendingIntent.getActivity(context, 3, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val end = PendingIntent.getBroadcast(context, 4, Intent(context, DeclineReceiver::class.java), PendingIntent.FLAG_IMMUTABLE)
+            val number = CallManager.number
+            val name = ContactsStore.find(context, number)?.name ?: number
+            val caller = android.app.Person.Builder().setName(name).setImportant(true).build()
+            val style = if (ringing) {
+                val answer = PendingIntent.getActivity(
+                    context, 5, Intent(open).putExtra(CallActivity.EXTRA_ANSWER, true),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                Notification.CallStyle.forIncomingCall(caller, end, answer)
+            } else {
+                Notification.CallStyle.forOngoingCall(caller, end)
+            }
+            val b = Notification.Builder(context, channel)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setStyle(style)
+                .setContentText(if (ringing) "Incoming call · tap to open" else "Call in progress · tap to return")
+                .setCategory(Notification.CATEGORY_CALL)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(tap)
+                .setFullScreenIntent(tap, true)
+            if (!ringing && CallManager.connectedAt > 0) {
+                b.setWhen(CallManager.connectedAt).setUsesChronometer(true).setShowWhen(true)
+            }
+            runCatching { nm.notify(NOTIFICATION_ID, b.build()) }
+                .onFailure { android.util.Log.w("ZeroSync", "call bar failed", it) }
+            android.util.Log.d("ZeroSync", "call bar posted, ringing=$ringing")
+        }
     }
 }
 
-/** "Decline" on the small incoming-call pop-up. Not exported: only our notification uses it. */
+/** "Decline" / "Hang up" on our call notifications. Not exported: only our notifications use it. */
 class DeclineReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: android.content.Context, intent: Intent) {
-        CallManager.decline()
+        if (CallManager.state == Call.STATE_RINGING) CallManager.decline() else CallManager.hangUp()
     }
 }

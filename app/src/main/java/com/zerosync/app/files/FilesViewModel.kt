@@ -57,6 +57,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     private val resolver = app.contentResolver
 
     var kind by mutableStateOf(DocKind.Pdf)
+
+    /** Last scroll spot (tab, first item, offset) so Back from a file returns to it. */
+    var savedScroll: Triple<DocKind, Int, Int>? = null
     var docs by mutableStateOf(emptyList<DocFile>())
         private set
     var loading by mutableStateOf(false)

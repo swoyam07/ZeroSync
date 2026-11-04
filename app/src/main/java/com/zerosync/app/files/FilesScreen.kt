@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -244,9 +245,12 @@ fun FilesScreen(vm: FilesViewModel) {
         if (vm.kind == DocKind.Images || vm.kind == DocKind.Videos) {
             // Squares, 3 per row; tap = open. Same order as always, but the grid sits at the
             // bottom of the screen (above the nav) and opens scrolled to its end; scroll up for more.
-            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            // Back from a file = same spot as before (saved in the ViewModel); new tab = the end.
+            val saved = vm.savedScroll?.takeIf { it.first == vm.kind }
+            val gridState = remember(vm.kind) { androidx.compose.foundation.lazy.grid.LazyGridState(saved?.second ?: 0, saved?.third ?: 0) }
+            DisposableEffect(vm.kind) { onDispose { vm.savedScroll = Triple(vm.kind, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset) } }
             // Jump to the end only when the tab opens (or the list first fills), not after a delete.
-            LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty()) gridState.scrollToItem(shown.lastIndex) }
+            LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) gridState.scrollToItem(shown.lastIndex) }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = gridState,
@@ -287,9 +291,12 @@ fun FilesScreen(vm: FilesViewModel) {
         }
         // Same order as always; the list sits at the bottom of the screen (above the nav) and
         // opens scrolled to its end, so the rows are in thumb reach. Scroll up for more.
-        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        // Back from a file = same spot as before (saved in the ViewModel); new tab = the end.
+        val saved = vm.savedScroll?.takeIf { it.first == vm.kind }
+        val listState = remember(vm.kind) { androidx.compose.foundation.lazy.LazyListState(saved?.second ?: 0, saved?.third ?: 0) }
+        DisposableEffect(vm.kind) { onDispose { vm.savedScroll = Triple(vm.kind, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) } }
         // Jump to the end only when the tab opens (or the list first fills), not after a delete.
-        LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty()) listState.scrollToItem(shown.lastIndex) }
+        LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) listState.scrollToItem(shown.lastIndex) }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),

@@ -70,6 +70,12 @@ class CallActivity : ComponentActivity() {
         const val EXTRA_ANSWER = "answer"
     }
 
+    // Call screen swiped away while still ringing: leave the call bar to come back (lock screen too).
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations && !CallManager.declining) CallService.showReturnBar(this)
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         answerIfAsked(intent)
@@ -92,8 +98,7 @@ class CallActivity : ComponentActivity() {
                 LaunchedEffect(call, state, CallManager.declining) {
                     if (call == null || state == Call.STATE_DISCONNECTED) finish()
                     if (CallManager.declining) finish() // close at once on decline
-                    // Answered or declined: the incoming-call banner is no longer needed.
-                    if (state != Call.STATE_RINGING) getSystemService(NotificationManager::class.java).cancelAll()
+                    // Answered: the incoming banner is replaced by the call bar (CallService).
                 }
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     when (state) {
