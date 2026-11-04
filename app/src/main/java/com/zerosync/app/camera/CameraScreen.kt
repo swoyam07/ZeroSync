@@ -17,6 +17,8 @@ import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -201,6 +203,8 @@ private fun CameraView(vm: CameraViewModel) {
     // Camera runs only while this screen is shown (CameraX also stops it in the background).
     // QR mode adds a frame reader (ZXing, offline) instead of the photo capture.
     val qrMode = vm.mode == CameraMode.Qr
+    // Bound camera, for pinch-to-zoom (real camera zoom, so the saved photo / page is zoomed too).
+    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
     DisposableEffect(lifecycleOwner, qrMode) {
         val future = ProcessCameraProvider.getInstance(context)
         val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -226,9 +230,9 @@ private fun CameraView(vm: CameraViewModel) {
                     }
                     image.close()
                 }
-                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                camera = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             } else {
-                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                camera = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
@@ -243,8 +247,38 @@ private fun CameraView(vm: CameraViewModel) {
         val viewH = constraints.maxHeight.toFloat()
         val frame = frameRect(viewW, viewH, vm.mode.aspect)
 
-        AndroidView({ previewView }, Modifier.fillMaxSize())
+        // Pinch on the preview = zoom (1x up to the camera's max, capped at 8x).
+        var zoom by remember(camera) { mutableStateOf(1f) } // shown in the chip; camera starts at 1x
+        // Set the camera zoom, kept between 1x and the lens max (capped at 8x).
+        fun setZoom(want: Float) {
+            val cam = camera ?: return
+            val max = (cam.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f).coerceIn(1f, 8f)
+            zoom = want.coerceIn(1f, max)
+            cam.cameraControl.setZoomRatio(zoom)
+        }
+        AndroidView(
+            { previewView },
+            Modifier.fillMaxSize().pointerInput(camera) {
+                detectTransformGestures { _, _, scale, _ -> setZoom(zoom * scale) }
+            },
+        )
         FrameOverlay(frame)
+        // Zoom level chip at the top, always shown; tap = back to 1x.
+        run {
+            Text(
+                "%.1fx".format(zoom),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { setZoom(1f) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
 
         Column(
             Modifier.align(Alignment.BottomCenter).padding(bottom = NavClearance),
@@ -275,7 +309,8 @@ private fun CameraView(vm: CameraViewModel) {
                     onClick = { vm.mode = if (qrMode) CameraMode.Passport else CameraMode.Qr }, // tap again = back to photos
                     modifier = Modifier.align(Alignment.CenterStart).padding(start = 28.dp),
                 )
-                if (!qrMode) Shutter(enabled = !vm.busy) {
+                // Shutter: tap = photo; hold and drag up = zoom in, down = zoom out (no photo).
+                if (!qrMode) Shutter(enabled = !vm.busy, onZoomDrag = { dy -> setZoom(zoom * kotlin.math.exp(-dy / 400f)) }) {
                     capture.takePicture(
                         ContextCompat.getMainExecutor(context),
                         object : ImageCapture.OnImageCapturedCallback() {
@@ -304,61 +339,93 @@ private val CameraModes = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.
  * others gray. Picking a mode slides the row (200 ms, user-approved). Tap a name, or swipe
  * sideways: left = next mode, right = previous. In QR mode none is highlighted.
  */
+/**
+ * Mode dial (Passport · ID · PDF): names sit on a curved wheel; the chosen one is big and white
+ * in the middle, neighbours smaller and gray. It loops (PDF → Passport → ID → PDF ...).
+ * Swipe left/right = turn one step; tap a side name = turn to it. 200 ms turn (approved slide).
+ */
 @Composable
 private fun ModePanel(selected: CameraMode, onSelect: (CameraMode) -> Unit, modifier: Modifier = Modifier) {
+    val n = CameraModes.size
+    // Wheel position: keeps counting past the ends (…, -1, 0, 1, 2, 3, …) so the turn always goes
+    // the short way round; the mode is position mod 3.
+    var pos by remember { mutableStateOf(maxOf(0, CameraModes.indexOf(selected))) }
     val found = CameraModes.indexOf(selected)
-    var lastIndex by remember { mutableStateOf(0) } // QR: keep the row where it was
-    if (found >= 0) lastIndex = found
-    val index = lastIndex
-    val currentIndex by androidx.compose.runtime.rememberUpdatedState(index)
+    LaunchedEffect(found) {
+        if (found >= 0 && Math.floorMod(pos, n) != found) {
+            // Changed from outside (e.g. leaving QR): step the short way to it.
+            val diff = Math.floorMod(found - pos, n)
+            pos += if (diff <= n / 2) diff else diff - n
+        }
+    }
+    val currentPos by androidx.compose.runtime.rememberUpdatedState(pos)
     val currentOnSelect by androidx.compose.runtime.rememberUpdatedState(onSelect)
-    val slot = 104.dp // width of one mode name
-    // Row shift so the chosen name sits in the middle; animated = the slide.
-    val shift by androidx.compose.animation.core.animateDpAsState(
-        targetValue = -(slot * index + slot / 2),
+    fun turnTo(p: Int) { pos = p; currentOnSelect(CameraModes[Math.floorMod(p, n)]) }
+    val anim by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = pos.toFloat(),
         animationSpec = androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-        label = "modeSlide",
+        label = "modeDial",
     )
     androidx.compose.foundation.layout.BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(64.dp)
             .pointerInput(Unit) {
                 var dx = 0f
                 detectHorizontalDragGestures(
                     onDragStart = { dx = 0f },
                     onDragEnd = {
                         val limit = 40.dp.toPx()
-                        val next = when {
-                            dx < -limit -> currentIndex + 1
-                            dx > limit -> currentIndex - 1
-                            else -> currentIndex
-                        }.coerceIn(0, CameraModes.lastIndex)
-                        if (next != currentIndex) currentOnSelect(CameraModes[next])
+                        if (dx < -limit) turnTo(currentPos + 1) else if (dx > limit) turnTo(currentPos - 1)
                     },
                 ) { change, amount -> change.consume(); dx += amount }
             },
     ) {
-        val half = maxWidth / 2
-        Row(Modifier.offset(x = half + shift).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-            CameraModes.forEach { mode ->
-                val active = mode == selected
-                Box(
-                    Modifier.width(slot).fillMaxHeight().clip(RoundedCornerShape(12.dp)).clickable { onSelect(mode) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        mode.label.uppercase(),
-                        color = if (active) Color.White else ZsColors.Secondary,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                        letterSpacing = 1.5.sp,
-                    )
-                }
-            }
+        val radius = maxWidth * 0.9f // wheel size: wide, gentle curve
+        val stepDeg = 24f           // angle between two names on the wheel
+        // Thin arc line under the names = the wheel's edge, with the white "chosen" dot in the middle.
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val r = radius.toPx()
+            val cx = size.width / 2
+            val top = size.height - 6.dp.toPx()
+            drawArc(
+                color = ZsColors.Secondary.copy(alpha = 0.5f),
+                startAngle = 270f - 40f, sweepAngle = 80f, useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(cx - r, top),
+                size = androidx.compose.ui.geometry.Size(2 * r, 2 * r),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
+            )
+            drawCircle(Color.White, 3.dp.toPx(), androidx.compose.ui.geometry.Offset(cx, top))
         }
-        // Small white dot under the middle = "this one".
-        if (found >= 0) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).size(5.dp).clip(CircleShape).background(Color.White))
+        val base = kotlin.math.floor(anim).toInt()
+        for (k in base - 2..base + 2) {
+            val d = k - anim                       // 0 = middle, ±1 = neighbours
+            if (kotlin.math.abs(d) > 1.9f) continue
+            val rad = Math.toRadians((d * stepDeg).toDouble())
+            val x = radius * kotlin.math.sin(rad).toFloat()
+            val y = radius * (1 - kotlin.math.cos(rad).toFloat())
+            val near = (1f - kotlin.math.abs(d)).coerceIn(0f, 1f) // 1 in the middle, 0 at the sides
+            val mode = CameraModes[Math.floorMod(k, n)]
+            val active = k == pos && found >= 0 // QR on: nothing highlighted
+            Text(
+                mode.label.uppercase(),
+                color = if (active) Color.White else ZsColors.Secondary,
+                fontSize = (12 + 4 * near).sp,
+                fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                letterSpacing = 1.5.sp,
+                maxLines = 1,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(x = x, y = 8.dp + y)
+                    .graphicsLayer {
+                        rotationZ = (d * stepDeg) // names tilt along the wheel
+                        alpha = 0.35f + 0.65f * near.coerceAtLeast(0.3f)
+                    }
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { if (k != pos || found < 0) turnTo(k) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
@@ -420,10 +487,13 @@ private fun FrameOverlay(frame: Rect) {
 }
 
 @Composable
-private fun Shutter(enabled: Boolean, onClick: () -> Unit) {
+private fun Shutter(enabled: Boolean, onZoomDrag: (Float) -> Unit, onClick: () -> Unit) {
+    val zoomDrag by androidx.compose.runtime.rememberUpdatedState(onZoomDrag) // latest camera after a rebind
     Box(
         Modifier
             .size(72.dp)
+            // Vertical drag starting on the shutter = zoom; a plain tap still takes the photo.
+            .pointerInput(Unit) { detectVerticalDragGestures { change, dy -> change.consume(); zoomDrag(dy) } }
             .clip(CircleShape)
             .border(3.dp, Color.White, CircleShape)
             .padding(6.dp)

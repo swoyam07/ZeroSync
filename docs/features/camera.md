@@ -49,3 +49,10 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/camera/`).
 
 ## Not done yet / ideas
 - Passport 2 × 2 inch option; flash; front camera; auto edge detection.
+
+- Zoom (2026-11-04): pinch on the preview = real camera zoom (1x–8x, capped by the lens), in all
+  modes; the saved photo / PDF page is zoomed too. Chip at the top always shows the level ("1.0x", "2.4x"); tap = 1x.
+  Shutter: tap = photo; hold and drag up = zoom in, drag down = zoom out (no photo).
+- Mode dial (2026-11-04, user chose "dial wheel"): Passport · ID · PDF on a curved wheel, chosen one big +
+  white in the middle, neighbours small + gray. Loops (PDF → Passport). Swipe = one step; tap a side name = turn to it.
+  Uses the approved 200 ms mode-strip slide.
