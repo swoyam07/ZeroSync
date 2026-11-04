@@ -217,6 +217,9 @@ fun FilesScreen(vm: FilesViewModel) {
             DocKind.All -> vm.allFiles.filter { it.kind == DocKind.All }
             else -> vm.docs.filter { it.kind == vm.kind }
         }
+        // Month groups, newest month first, e.g. "2026 Nov". Inside a month the tab's own order stays.
+        val months = remember(shown) { groupByMonth(shown) }
+        val rowCount = shown.size + months.size // files + one heading per month
         if (selected.isNotEmpty()) {
             // Select mode bar: ✕ (stop) · "N selected" · red Delete.
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -250,7 +253,7 @@ fun FilesScreen(vm: FilesViewModel) {
             val gridState = remember(vm.kind) { androidx.compose.foundation.lazy.grid.LazyGridState(saved?.second ?: 0, saved?.third ?: 0) }
             DisposableEffect(vm.kind) { onDispose { vm.savedScroll = Triple(vm.kind, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset) } }
             // Jump to the end only when the tab opens (or the list first fills), not after a delete.
-            LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) gridState.scrollToItem(shown.lastIndex) }
+            LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) gridState.scrollToItem(rowCount - 1) }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = gridState,
@@ -260,7 +263,9 @@ fun FilesScreen(vm: FilesViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
             ) {
-                gridItems(shown, key = { it.uri.toString() }) { doc ->
+                months.forEach { (title, docs) ->
+                item(key = "m:" + title, span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { MonthHeader(title) }
+                gridItems(docs, key = { it.uri.toString() }) { doc ->
                     Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).combinedClickable(onClick = { vm.open(doc) }, onLongClick = { options = doc })) {
                         Thumbnail(doc.uri, Modifier.fillMaxSize(), sizePx = 360)
                         if (doc.kind == DocKind.Videos) {
@@ -271,20 +276,8 @@ fun FilesScreen(vm: FilesViewModel) {
                                 modifier = Modifier.align(Alignment.Center).size(18.dp),
                             )
                         }
-                        // Date tag, bottom-left: "1 Jan" this year, "1 Jan 2015" older.
-                        Text(
-                            com.zerosync.app.ui.shortDate(doc.modified),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(4.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                        )
                     }
+                }
                 }
             }
             return@Column
@@ -296,14 +289,16 @@ fun FilesScreen(vm: FilesViewModel) {
         val listState = remember(vm.kind) { androidx.compose.foundation.lazy.LazyListState(saved?.second ?: 0, saved?.third ?: 0) }
         DisposableEffect(vm.kind) { onDispose { vm.savedScroll = Triple(vm.kind, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) } }
         // Jump to the end only when the tab opens (or the list first fills), not after a delete.
-        LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) listState.scrollToItem(shown.lastIndex) }
+        LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty() && saved == null) listState.scrollToItem(rowCount - 1) }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = NavClearance),
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
         ) {
-            items(shown, key = { it.uri.toString() }) { doc ->
+            months.forEach { (title, docs) ->
+            item(key = "m:" + title) { MonthHeader(title) }
+            items(docs, key = { it.uri.toString() }) { doc ->
                 val ticked = doc in selected
                 FileRow(
                     doc,
@@ -314,6 +309,7 @@ fun FilesScreen(vm: FilesViewModel) {
                     // In select mode a tap ticks / unticks; otherwise it opens the file.
                     if (selected.isNotEmpty()) selected = if (ticked) selected - doc else selected + doc else vm.open(doc)
                 }
+            }
             }
         }
     }
@@ -327,6 +323,26 @@ fun FilesScreen(vm: FilesViewModel) {
 }
 
 private val RailWidth = 64.dp
+
+/** Files split by month (by last change), newest month first: "2026 Nov" to its files. */
+private fun groupByMonth(docs: List<DocFile>): List<Pair<String, List<DocFile>>> {
+    val cal = java.util.Calendar.getInstance()
+    val fmt = java.text.SimpleDateFormat("yyyy MMM", java.util.Locale.getDefault())
+    return docs.groupBy { d -> cal.timeInMillis = d.modified; cal.get(java.util.Calendar.YEAR) * 12 + cal.get(java.util.Calendar.MONTH) }
+        .toSortedMap(compareByDescending { it })
+        .map { (_, list) -> fmt.format(java.util.Date(list.first().modified)) to list }
+}
+
+/** Month heading above that month's files. */
+@Composable
+private fun MonthHeader(title: String) {
+    Text(
+        title,
+        color = Color.White,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp, start = 4.dp),
+    )
+}
 
 private fun DocKind.icon() = when (this) {
     DocKind.All -> ZsIcons.Folder
@@ -405,8 +421,7 @@ private fun FileRow(doc: DocFile, onLongClick: () -> Unit, isBook: Boolean = fal
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(doc.name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                Formatter.formatShortFileSize(context, doc.size) + " · " +
-                    com.zerosync.app.ui.shortDate(doc.modified) +
+                Formatter.formatShortFileSize(context, doc.size) +
                     if (doc.canPreview) "" else " · no preview",
                 style = MaterialTheme.typography.labelSmall,
                 color = ZsColors.Secondary,
