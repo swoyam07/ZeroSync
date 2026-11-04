@@ -245,7 +245,8 @@ fun FilesScreen(vm: FilesViewModel) {
             // Squares, 3 per row; tap = open. Same order as always, but the grid sits at the
             // bottom of the screen (above the nav) and opens scrolled to its end; scroll up for more.
             val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-            LaunchedEffect(vm.kind, shown.size) { if (shown.isNotEmpty()) gridState.scrollToItem(shown.lastIndex) }
+            // Jump to the end only when the tab opens (or the list first fills), not after a delete.
+            LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty()) gridState.scrollToItem(shown.lastIndex) }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = gridState,
@@ -266,6 +267,19 @@ fun FilesScreen(vm: FilesViewModel) {
                                 modifier = Modifier.align(Alignment.Center).size(18.dp),
                             )
                         }
+                        // Date tag, bottom-left: "1 Jan" this year, "1 Jan 2015" older.
+                        Text(
+                            com.zerosync.app.ui.shortDate(doc.modified),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
                     }
                 }
             }
@@ -274,7 +288,8 @@ fun FilesScreen(vm: FilesViewModel) {
         // Same order as always; the list sits at the bottom of the screen (above the nav) and
         // opens scrolled to its end, so the rows are in thumb reach. Scroll up for more.
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-        LaunchedEffect(vm.kind, shown.size) { if (shown.isNotEmpty()) listState.scrollToItem(shown.lastIndex) }
+        // Jump to the end only when the tab opens (or the list first fills), not after a delete.
+        LaunchedEffect(vm.kind, shown.isEmpty()) { if (shown.isNotEmpty()) listState.scrollToItem(shown.lastIndex) }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -384,7 +399,7 @@ private fun FileRow(doc: DocFile, onLongClick: () -> Unit, isBook: Boolean = fal
             Text(doc.name, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 Formatter.formatShortFileSize(context, doc.size) + " · " +
-                    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(doc.modified)) +
+                    com.zerosync.app.ui.shortDate(doc.modified) +
                     if (doc.canPreview) "" else " · no preview",
                 style = MaterialTheme.typography.labelSmall,
                 color = ZsColors.Secondary,

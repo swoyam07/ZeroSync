@@ -540,7 +540,7 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
                         Text(doc.displayName.substringBeforeLast('.'), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             (if (doc.isPublic) "Public · " else "Private · ") +
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(doc.file.lastModified())),
+                                com.zerosync.app.ui.shortDate(doc.file.lastModified()),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (doc.isPublic) Color.White else ZsColors.Secondary,
                         )
