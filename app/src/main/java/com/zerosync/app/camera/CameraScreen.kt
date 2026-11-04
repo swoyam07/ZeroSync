@@ -530,6 +530,18 @@ private fun SavedList(vm: CameraViewModel) {
     // Category picker: icon column at the bottom-right (like the File section), no counts.
     val categories = listOf(CameraMode.Passport, CameraMode.Id, CameraMode.Pdf)
     var category by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CameraMode.Passport) }
+    // Tapped file: full-screen view (photo: pinch zoom; PDF: pages). Back = list.
+    vm.viewing?.let { doc ->
+        androidx.activity.compose.BackHandler { vm.viewing = null }
+        val uri = android.net.Uri.fromFile(doc.file)
+        val file = com.zerosync.app.files.DocFile(
+            uri, doc.displayName, doc.file.length(), doc.file.lastModified(),
+            if (doc.isPdf) com.zerosync.app.files.DocKind.Pdf else com.zerosync.app.files.DocKind.Images,
+        )
+        val content = if (doc.isPdf) com.zerosync.app.files.DocContent.Pdf(uri) else com.zerosync.app.files.DocContent.Picture(uri)
+        com.zerosync.app.files.DocViewer(file, content, onBack = { vm.viewing = null })
+        return
+    }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 64.dp, end = 64.dp)) {
             SavedItems(vm, vm.saved.filter { it.kind == category.label.uppercase() })
@@ -594,14 +606,14 @@ private fun SavedItems(vm: CameraViewModel, docs: List<SavedDoc>) {
             )
         }
         items(docs, key = { it.file.name }) { doc ->
-            // Hold = "Delete this file?" (same as the File section). No swipe.
+            // Tap = open full screen; hold = "Delete this file?" (same as the File section). No swipe.
             run {
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(ZsColors.Surface)
-                        .combinedClickable(onClick = {}, onLongClick = { toDelete = doc })
+                        .combinedClickable(onClick = { vm.viewing = doc }, onLongClick = { toDelete = doc })
                         .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

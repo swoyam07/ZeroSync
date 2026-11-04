@@ -46,6 +46,9 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     var saved by mutableStateOf(emptyList<SavedDoc>())
         private set
 
+    /** Saved file open full screen (tap in the Saved list); null = list. */
+    var viewing by mutableStateOf<SavedDoc?>(null)
+
     var busy by mutableStateOf(false)
         private set
 

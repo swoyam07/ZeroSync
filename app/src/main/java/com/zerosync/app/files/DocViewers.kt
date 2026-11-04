@@ -97,8 +97,15 @@ fun DocViewer(doc: DocFile, content: DocContent, onBack: () -> Unit) {
             is DocContent.Excel -> ExcelView(content.sheets)
             is DocContent.Text -> TextView(content.lines)
             is DocContent.Picture -> Zoomable {
-                // Big system thumbnail (up to 2048 px) is sharp on screen and light on memory.
-                Thumbnail(content.uri, Modifier.fillMaxSize(), sizePx = 2048, contentScale = ContentScale.Fit, placeholder = Color.Black)
+                if (content.uri.scheme == "file") {
+                    // App-private file (Camera's saved photos): decode it ourselves, up to 2048 px.
+                    val path = content.uri.path.orEmpty()
+                    val bmp by produceState<Bitmap?>(null, path) { value = withContext(Dispatchers.IO) { decodeFileSampled(path, 2048) } }
+                    bmp?.let { androidx.compose.foundation.Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+                } else {
+                    // Big system thumbnail (up to 2048 px) is sharp on screen and light on memory.
+                    Thumbnail(content.uri, Modifier.fillMaxSize(), sizePx = 2048, contentScale = ContentScale.Fit, placeholder = Color.Black)
+                }
             }
             is DocContent.Video -> VideoView(content.uri)
         }
@@ -489,4 +496,13 @@ private fun TextView(lines: List<String>) {
             }
         }
     }
+}
+
+/** Decode an image file at most [maxSide] px on its long side (keeps memory low). */
+private fun decodeFileSampled(path: String, maxSide: Int): Bitmap? {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeFile(path, bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+    return android.graphics.BitmapFactory.decodeFile(path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
 }
