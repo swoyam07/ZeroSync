@@ -15,7 +15,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import android.os.SystemClock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -99,8 +101,46 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
                         Player.EVENT_POSITION_DISCONTINUITY,
                     )
                 ) saveLastSpot()
+                if (events.containsAny(
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_IS_PLAYING_CHANGED,
+                        Player.EVENT_POSITION_DISCONTINUITY,
+                        Player.EVENT_PLAYBACK_STATE_CHANGED,
+                    )
+                ) updateBar()
             }
         })
+    }
+
+    // Lock-screen / notification music bar. Its buttons act on what is playing now.
+    private val bar = MusicBar(app, object : MusicBar.Controls {
+        override fun play() { player.play() }
+        override fun pause() { player.pause() }
+        override fun next() { player.seekToNextMediaItem() }
+        override fun previous() { player.seekToPreviousMediaItem() }
+        override fun seekTo(ms: Long) { this@MusicViewModel.seekTo(ms) }
+    })
+    private var barStarted = false // shown only after music first plays
+    private var coverFor: Long? = null
+    private var cover: android.graphics.Bitmap? = null
+
+    private fun updateBar() {
+        if (player.isPlaying) barStarted = true
+        if (!barStarted) return
+        val song = folders.find { it.id == playingFolderId }?.songs?.getOrNull(player.currentMediaItemIndex) ?: return
+        val dur = player.duration.takeIf { it > 0 } ?: 0L
+        bar.update(song.title, song.artist, player.isPlaying, player.currentPosition, dur, cover.takeIf { coverFor == song.id })
+        if (coverFor != song.id) {
+            coverFor = song.id
+            cover = null
+            // Cover art off the main thread, then refresh the bar with it.
+            viewModelScope.launch {
+                val bmp = withContext(Dispatchers.IO) {
+                    runCatching { getApplication<Application>().contentResolver.loadThumbnail(song.uri, android.util.Size(512, 512), null) }.getOrNull()
+                }
+                if (coverFor == song.id) { cover = bmp; updateBar() }
+            }
+        }
     }
 
     fun load() {
@@ -309,6 +349,7 @@ class MusicViewModel(app: Application) : AndroidViewModel(app) {
     /** App left (home / app switch) with the screen still on: pause. Screen off keeps playing. */
 
     override fun onCleared() {
+        bar.release()
         player.release()
     }
 }

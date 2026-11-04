@@ -21,7 +21,10 @@ Status: v0.1 implemented (code in `app/src/main/java/com/zerosync/app/music/`).
   bar appears), LEFT + circle = change song + play, right + circle = pick, down = folder. Volume button: right = volume, left = sleep timer.
 
 ## Playback
-- No notification, no background service (user removed it 2026-10-18).
+- Music bar (user chose "bar only" 2026-11-04, `MusicBar.kt`): Android's media notification +
+  lock-screen player (cover, title, play/pause, previous, next, time bar) via built-in MediaSession,
+  no library. Shown after music first plays; swipeable when paused. Still NO background service
+  (service removed 2026-10-18 stays removed).
 - Keeps playing with the screen off (power button) and while switching tabs.
 - Keeps playing when leaving the app (home / app switch); stops when cleared from recents.
   No service, so HyperOS may still kill it in the background.
