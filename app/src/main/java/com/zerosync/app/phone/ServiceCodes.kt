@@ -36,23 +36,22 @@ val ServiceCodes: Map<Carrier, List<Pair<String, String>>> = mapOf(
     ),
 )
 
-/** Network codes button, e.g. "*# NTC ›" (blue outline) / "*# Ncell ›" (purple outline). */
+/** Network codes button, e.g. "*# NTC ›" (filled blue) / "*# Ncell ›" (filled purple). */
 @Composable
 fun NetworkButton(carrier: Carrier, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    // Looks like a button, not a SIM tag: dark pill, network-colour outline, a "*#" code mark
+    // Looks like a button, not a SIM tag: pill filled with the network colour, a "*#" code mark
     // in front and a "›" after (= opens that network's code list).
     androidx.compose.foundation.layout.Row(
         modifier
             .clip(RoundedCornerShape(50))
-            .background(ZsColors.Surface)
-            .border(1.dp, Color(carrier.color), RoundedCornerShape(50))
+            .background(Color(carrier.color))
             .clickable(onClick = onClick)
             .padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Text("*#", color = ZsColors.Secondary, style = MaterialTheme.typography.labelSmall)
+        Text("*#", color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
         Text(carrier.label, color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 6.dp))
-        Text("›", color = ZsColors.Secondary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
+        Text("›", color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
