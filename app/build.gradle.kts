@@ -1,3 +1,5 @@
+import java.util.Properties
+
 // AGP 9 has built-in Kotlin support, so no separate kotlin-android plugin.
 plugins {
     alias(libs.plugins.android.application)
@@ -16,13 +18,30 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release key details live in keystore.properties (git-ignored, never committed).
+    // Same key every release = updates install over the old app and keep its data.
+    val keystoreFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties().apply {
+        if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystoreFile.exists()) {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Local testing only. Replace with a real signing key before sharing the app.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
